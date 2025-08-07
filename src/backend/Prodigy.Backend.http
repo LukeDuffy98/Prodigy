@@ -1,0 +1,6 @@
+@Prodigy.Backend_HostAddress = http://localhost:5169
+
+GET {{Prodigy.Backend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
