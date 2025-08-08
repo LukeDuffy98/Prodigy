@@ -35,7 +35,7 @@ const GitHubAgent: React.FC = () => {
     milestone: ''
   });
 
-  const API_BASE = 'http://localhost:5000/api/agents/github';
+  const API_BASE = 'http://localhost:5169/api/agents/github';
 
   useEffect(() => {
     loadFeatureRequests();
