@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prodigy.Backend")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c894024df7d18d97a2f6e6654d22ab8147aa16a7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+911ffb925e4931835d1725d0f1e727ded3cc35fa")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prodigy.Backend")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prodigy.Backend")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
