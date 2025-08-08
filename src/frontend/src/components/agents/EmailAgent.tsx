@@ -15,17 +15,22 @@ const EmailAgent: React.FC = () => {
     
     try {
       setIsSending(true);
-      await axios.post('/api/agents/email/send', {
+      const response = await axios.post('/api/agents/email/send', {
         recipients: emailForm.recipients.split(',').map(r => r.trim()),
         subject: emailForm.subject,
         body: emailForm.body
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
       
       setMessage('Email sent successfully!');
       setEmailForm({ recipients: '', subject: '', body: '' });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
-      setMessage('Error sending email');
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Error sending email';
+      setMessage(`Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
       setTimeout(() => setMessage(''), 3000);
@@ -34,8 +39,14 @@ const EmailAgent: React.FC = () => {
 
   const handleDraftEmail = async () => {
     try {
-      const prompt = `Create an email about: ${emailForm.subject}`;
-      const response = await axios.post('/api/agents/email/draft', prompt);
+      const response = await axios.post('/api/agents/email/draft', {
+        prompt: `Create an email about: ${emailForm.subject}`,
+        context: emailForm.body ? `Additional context: ${emailForm.body}` : undefined
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
       setEmailForm(prev => ({
         ...prev,
@@ -44,9 +55,10 @@ const EmailAgent: React.FC = () => {
       }));
       
       setMessage('AI draft generated! Review and edit as needed.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error drafting email:', error);
-      setMessage('Error generating draft');
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Error generating draft';
+      setMessage(`Error: ${errorMessage}`);
     }
     setTimeout(() => setMessage(''), 3000);
   };

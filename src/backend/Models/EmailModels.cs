@@ -55,6 +55,23 @@ public class ReplyEmailRequest
 }
 
 /// <summary>
+/// Input for drafting an email using AI
+/// </summary>
+public class DraftEmailRequest
+{
+    /// <summary>
+    /// Description of what the email should accomplish
+    /// </summary>
+    [Required]
+    public string Prompt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional context or additional information for the AI
+    /// </summary>
+    public string? Context { get; set; }
+}
+
+/// <summary>
 /// Input for creating a task with an execution plan
 /// </summary>
 public class CreateTaskRequest
