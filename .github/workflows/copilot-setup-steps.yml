@@ -24,14 +24,15 @@ jobs:
         with:
           node-version: '20.x'
 
+
       # Restore and build for C#
       - name: Restore dependencies (C#)
         run: dotnet restore
-        working-directory: ./src/backend # Updated path
+        working-directory: .
 
       - name: Build (C#)
         run: dotnet build --no-restore
-        working-directory: ./src/backend # Updated path
+        working-directory: .
 
       # Test for C#
       - name: Test (C#)
