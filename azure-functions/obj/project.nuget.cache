@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "YaQdfdMZZvA=",
+  "dgSpecHash": "qSRblzarCNo=",
   "success": true,
-  "projectFilePath": "P:\\Prodigy\\Prodigy\\azure-functions\\Prodigy.Functions.csproj",
+  "projectFilePath": "/home/runner/work/Prodigy/Prodigy/azure-functions/Prodigy.Functions.csproj",
   "expectedPackageFiles": [],
   "logs": []
 }
