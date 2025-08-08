@@ -192,7 +192,8 @@ interface ArrayEditorProps {
   isTextArea?: boolean;
 }
 
-const ArrayEditor: React.FC<ArrayEditorProps> = ({ items, onAdd, onRemove, placeholder, isTextArea = false }) => {
+// ...existing code...
+const ArrayEditor: React.FC<ArrayEditorProps> = ({ items = [], onAdd, onRemove, placeholder, isTextArea = false }) => {
   const [inputValue, setInputValue] = useState('');
 
   const handleAdd = () => {
