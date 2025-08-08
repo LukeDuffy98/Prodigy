@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prodigy.Functions")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c894024df7d18d97a2f6e6654d22ab8147aa16a7")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ceb0e9a79ce7c3840b0a037599111f2a1c1359bd")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prodigy.Functions")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prodigy.Functions")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
