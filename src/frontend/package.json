@@ -29,6 +29,8 @@
     "vite": "^7.1.0"
   },
   "scripts": {
-  "test": "echo \"No tests specified\" && exit 0"
+  "test": "echo \"No tests specified\" && exit 0",
+  "build": "echo 'No build step required for dev'; exit 0",
+  "dev": "npm run dev"
 }
 }
