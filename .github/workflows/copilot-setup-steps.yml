@@ -41,14 +41,14 @@ jobs:
       # Optional: Install dependencies for TypeScript
       - name: Install dependencies (TypeScript)
         run: npm install
-        working-directory: ./frontend
+        working-directory: src/frontend
 
       # Optional: Build TypeScript
       - name: Build (TypeScript)
         run: npm run build
-        working-directory: ./frontend
+        working-directory: src/frontend
 
       # Optional: Run tests for TypeScript
       - name: Test (TypeScript)
         run: npm test
-        working-directory: ./frontend
+        working-directory: src/frontend
