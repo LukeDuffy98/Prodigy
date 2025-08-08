@@ -27,28 +27,28 @@ jobs:
       # Restore and build for C#
       - name: Restore dependencies (C#)
         run: dotnet restore
-        working-directory: ./src # Change if your solution is elsewhere
+        working-directory: ./src/backend # Updated path
 
       - name: Build (C#)
         run: dotnet build --no-restore
-        working-directory: ./src
+        working-directory: ./src/backend # Updated path
 
       # Test for C#
       - name: Test (C#)
         run: dotnet test --no-build --verbosity normal
-        working-directory: ./src
+        working-directory: ./src/backend # Updated path
 
       # Optional: Install dependencies for TypeScript
       - name: Install dependencies (TypeScript)
         run: npm install
-        working-directory: ./web # Change if your package.json is elsewhere
+        working-directory: ./frontend
 
       # Optional: Build TypeScript
       - name: Build (TypeScript)
         run: npm run build
-        working-directory: ./web
+        working-directory: ./frontend
 
       # Optional: Run tests for TypeScript
       - name: Test (TypeScript)
         run: npm test
-        working-directory: ./web
+        working-directory: ./frontend
