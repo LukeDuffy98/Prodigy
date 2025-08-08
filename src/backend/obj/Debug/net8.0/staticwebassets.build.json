@@ -1,12 +1,11 @@
 {
   "Version": 1,
-  "Hash": "h4Uax+niIcM8ZnTDF0vTc8m/uaOi5GiEE+4SKK3ysiU=",
+  "Hash": "fkWxxuMn4tJSXHrv+Fk7Babkmv6jgwui/HIlqqatMGU=",
   "Source": "Prodigy.Backend",
   "BasePath": "_content/Prodigy.Backend",
   "Mode": "Default",
   "ManifestType": "Build",
   "ReferencedProjectsConfiguration": [],
   "DiscoveryPatterns": [],
-  "Assets": [],
-  "Endpoints": []
+  "Assets": []
 }
