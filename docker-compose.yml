@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Backend API
+  prodigy-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "5000:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ISSUER=Prodigy
+      - JWT_AUDIENCE=ProdigyUsers
+      - MICROSOFT_GRAPH_API_URL=https://graph.microsoft.com/v1.0
+      - GITHUB_API_URL=https://api.github.com
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPO_OWNER=LukeDuffy98
+      - GITHUB_REPO_NAME=Prodigy
+      - LINKEDIN_CLIENT_ID=${LINKEDIN_CLIENT_ID}
+      - LINKEDIN_CLIENT_SECRET=${LINKEDIN_CLIENT_SECRET}
+    networks:
+      - prodigy-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend
+  prodigy-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - prodigy-backend
+    networks:
+      - prodigy-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Azure Functions (optional for local testing)
+  prodigy-functions:
+    build:
+      context: .
+      dockerfile: Dockerfile.functions
+    ports:
+      - "7071:80"
+    environment:
+      - AzureWebJobsStorage=UseDevelopmentStorage=true
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+    networks:
+      - prodigy-network
+    profiles:
+      - functions
+
+networks:
+  prodigy-network:
+    driver: bridge
+
+# To run with functions: docker-compose --profile functions up
+# To run without functions: docker-compose up
