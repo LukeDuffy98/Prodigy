@@ -26,3 +26,25 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Ignore build output and compiled assets
+azure-functions/bin/
+azure-functions/obj/
+src/backend/bin/
+src/backend/obj/
+*.dll
+*.pdb
+*.cache
+*.sourcelink.json
+*.AssemblyInfo.cs
+*.AssemblyInfoInputs.cache
+*.GeneratedMSBuildEditorConfig.editorconfig
+*.GlobalUsings.g.cs
+*.assets.cache
+*.nuget.g.props
+*.nuget.g.targets
+*.nuget.dgspec.json
+*.nuget.cache
+*.json
+*.ref/
+*.refint/
