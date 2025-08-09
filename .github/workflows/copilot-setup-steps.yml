@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-test:
+  copilot-setup-steps:  # <-- Updated job name
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -23,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
-
 
       # Restore and build for C#
       - name: Restore dependencies (C#)
@@ -42,14 +41,14 @@ jobs:
       # Optional: Install dependencies for TypeScript
       - name: Install dependencies (TypeScript)
         run: npm install
-        working-directory: ./frontend
+        working-directory: src/frontend
 
       # Optional: Build TypeScript
       - name: Build (TypeScript)
         run: npm run build
-        working-directory: ./frontend
+        working-directory: src/frontend
 
       # Optional: Run tests for TypeScript
       - name: Test (TypeScript)
         run: npm test
-        working-directory: ./frontend
+        working-directory: src/frontend
