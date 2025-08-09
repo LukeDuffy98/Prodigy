@@ -48,7 +48,3 @@ jobs:
         run: npm run build
         working-directory: src/frontend
 
-      # Optional: Run tests for TypeScript
-      - name: Test (TypeScript)
-        run: npm test
-        working-directory: src/frontend
