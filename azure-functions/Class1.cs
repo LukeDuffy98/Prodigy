@@ -74,8 +74,9 @@ public class GitHubFunctions
                 }
             }
 
-            // Add assignee if provided
-            if (!string.IsNullOrEmpty(request.AssignedTo))
+            // Add assignee if provided and valid (skip "copilot" as it's not a real GitHub user)
+            if (!string.IsNullOrEmpty(request.AssignedTo) && 
+                !string.Equals(request.AssignedTo, "copilot", StringComparison.OrdinalIgnoreCase))
             {
                 newIssue.Assignees.Add(request.AssignedTo);
             }

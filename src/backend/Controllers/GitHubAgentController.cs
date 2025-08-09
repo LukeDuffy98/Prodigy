@@ -94,6 +94,15 @@ public class GitHubAgentController : ControllerBase
                 };
             }
         }
+        catch (HttpRequestException ex) when (ex.Message.Contains("actively refused"))
+        {
+            _logger.LogWarning(ex, "Azure Functions service is not available. GitHub feature creation requires Azure Functions to be running.");
+            return StatusCode(503, new { 
+                error = "GitHub feature request service is temporarily unavailable", 
+                message = "Azure Functions service is not running. Please start the Functions service to enable GitHub integration.",
+                suggestion = "Run 'func start' in the azure-functions directory or contact your administrator."
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating GitHub feature request");
@@ -285,6 +294,15 @@ public class GitHubAgentController : ControllerBase
                 _logger.LogError("Azure Function call failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
                 return StatusCode(500, "An error occurred while listing feature requests");
             }
+        }
+        catch (HttpRequestException ex) when (ex.Message.Contains("actively refused"))
+        {
+            _logger.LogWarning(ex, "Azure Functions service is not available. GitHub feature listing requires Azure Functions to be running.");
+            return StatusCode(503, new { 
+                error = "GitHub feature request service is temporarily unavailable", 
+                message = "Azure Functions service is not running. Please start the Functions service to enable GitHub integration.",
+                suggestion = "Run 'func start' in the azure-functions directory or contact your administrator."
+            });
         }
         catch (Exception ex)
         {
