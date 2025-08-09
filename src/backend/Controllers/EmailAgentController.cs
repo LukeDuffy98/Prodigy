@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Prodigy.Backend.Models;
+using Prodigy.Backend.Services;
 
 namespace Prodigy.Backend.Controllers;
 
@@ -13,10 +14,14 @@ namespace Prodigy.Backend.Controllers;
 public class EmailAgentController : ControllerBase
 {
     private readonly ILogger<EmailAgentController> _logger;
+    private readonly IGraphEmailService _graphEmailService;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public EmailAgentController(ILogger<EmailAgentController> logger)
+    public EmailAgentController(ILogger<EmailAgentController> logger, IGraphEmailService graphEmailService, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
+        _graphEmailService = graphEmailService;
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <summary>
@@ -41,22 +46,27 @@ public class EmailAgentController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            // TODO: Implement Microsoft Graph API integration for sending emails
-            // TODO: Apply user's PersonalizationProfile to email content
-            // TODO: Forward request to Azure Function for actual email sending
+            // Get user's personalization profile
+            var personalizationProfile = await GetPersonalizationProfileAsync();
             
-            _logger.LogInformation("Email send request processed for {RecipientCount} recipients", request.Recipients.Length);
+            // Apply personalization to email content
+            var personalizedBody = _graphEmailService.ApplyPersonalization(request.Body, personalizationProfile);
+            
+            // Send email via Microsoft Graph API
+            var messageId = await _graphEmailService.SendEmailAsync(request.Recipients, request.Subject, personalizedBody);
+            
+            _logger.LogInformation("Email sent successfully to {RecipientCount} recipients via Microsoft Graph API", request.Recipients.Length);
             
             return Ok(new { 
                 Success = true, 
-                Message = "Email sent successfully",
-                MessageId = Guid.NewGuid().ToString(),
+                Message = "Email sent successfully via Microsoft Graph API",
+                MessageId = messageId,
                 SentAt = DateTime.UtcNow
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending email");
+            _logger.LogError(ex, "Error sending email via Microsoft Graph API");
             return StatusCode(500, new { error = "An error occurred while sending the email", details = ex.Message });
         }
     }
@@ -151,5 +161,55 @@ public class EmailAgentController : ControllerBase
             _logger.LogError(ex, "Error drafting email");
             return StatusCode(500, new { error = "An error occurred while drafting the email", details = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Helper method to get the user's personalization profile
+    /// </summary>
+    private async Task<PersonalizationProfile> GetPersonalizationProfileAsync()
+    {
+        try
+        {
+            // Create HTTP client to call the personalization API
+            var httpClient = _httpClientFactory.CreateClient();
+            
+            // In a real implementation, this would use the current user's token
+            // For now, we'll call the local personalization endpoint
+            var response = await httpClient.GetAsync("http://localhost:5169/api/user/personalization-profile");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                var profile = System.Text.Json.JsonSerializer.Deserialize<PersonalizationProfile>(content, new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                
+                return profile ?? GetDefaultPersonalizationProfile();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to retrieve personalization profile, using default");
+        }
+        
+        return GetDefaultPersonalizationProfile();
+    }
+
+    /// <summary>
+    /// Returns a default personalization profile
+    /// </summary>
+    private static PersonalizationProfile GetDefaultPersonalizationProfile()
+    {
+        return new PersonalizationProfile
+        {
+            Tone = "professional",
+            PreferredGreetings = new[] { "Hello" },
+            SignatureClosings = new[] { "Best regards" },
+            FavouritePhrases = Array.Empty<string>(),
+            ProhibitedWords = Array.Empty<string>(),
+            AboutMe = "Professional user",
+            CustomAgentHints = new Dictionary<string, string>()
+        };
     }
 }

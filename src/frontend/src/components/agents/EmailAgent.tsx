@@ -15,7 +15,7 @@ const EmailAgent: React.FC = () => {
     
     try {
       setIsSending(true);
-      const response = await axios.post('/api/agents/email/send', {
+      await axios.post('/api/agents/email/send', {
         recipients: emailForm.recipients.split(',').map(r => r.trim()),
         subject: emailForm.subject,
         body: emailForm.body

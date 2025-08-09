@@ -1,11 +1,19 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Prodigy.Backend.Services;
+using DotNetEnv;
+
+// Load environment variables from .env file
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// Register Graph Email Service
+builder.Services.AddScoped<IGraphEmailService, GraphEmailService>();
 
 // Add HTTP client for Azure Functions
 builder.Services.AddHttpClient("AzureFunctions", client =>
