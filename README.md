@@ -1,188 +1,218 @@
+# 🤖 Prodigy - Intelligent Digital Workspace
 
-# Prodigy
+**Prodigy** is your AI-powered digital workspace that streamlines daily productivity through intelligent agents. Built with .NET 8 and React, Prodigy integrates with Microsoft 365, LinkedIn, and GitHub to automate communication, task management, learning, and collaboration workflows.
 
-**Prodigy** is your intelligent digital workspace: a single, responsive web application that empowers you with automated “agents” to streamline your daily workflow. Prodigy connects to Microsoft 365 (Outlook, Tasks, Calendar), LinkedIn, and GitHub to help you communicate, organize, plan, and track work far more efficiently.
+## 🚀 Quick Start
 
----
+```bash
+# Clone and setup
+git clone https://github.com/LukeDuffy98/Prodigy.git
+cd Prodigy
 
-## Vision
+# Backend setup
+dotnet restore
+dotnet build
 
-- **Prodigy** acts as a central desk staffed by digital agents: email, calendar, task, learning, and GitHub agents, all reporting to you.
-- Automates repetitive tasks and integrates multiple services in one unified, mobile-friendly platform.
-- Uses a modern front-end, a secure C# API backend, and Azure Functions for all business logic and third-party integrations.
+# Frontend setup  
+cd src/frontend
+npm install
+npm run build
 
----
+# Run the application
+# Terminal 1 - Backend API
+cd src/backend && dotnet run
 
-## Features & Functional Requirements
-
-### 1. Email Operations
-- **Send Email** – Compose and send new emails.
-- **Reply to Email** – Draft and send replies to existing threads.
-
-### 2. Task/Execution Planning
-- **Create Task** – Enter a work task.
-- **Detailed Execution Plan** – Upon task creation, generate (automatically or via AI/Copilot prompt) a step-by-step plan for successful completion, visible in the app.
-
-### 3. Learning Materials
-- **Create Learning Material** – Describe a topic and have Prodigy generate structured learning content in text, outline, or slide formats.
-
-### 4. Quote Generation
-- **Create Quote** – Enter client/service info and terms; Prodigy generates a formatted quote (text or PDF).
-
-### 5. Advanced Availability Lookup
-- **Availability Finder** – Surface free blocks in your Outlook 365 calendar (e.g., “Find 3 consecutive days 9am–5pm where I can teach”), using Microsoft Graph.
-
-### 6. Feature Requests Integration (GitHub)
-- **Add Feature Request** – Submit new feature ideas directly from the app. These are written as issues to the GitHub repo and can be assigned to "github copilot user" for follow-up.
-
----
-
-## Technical Architecture
-
-### Front End
-- Modern, responsive UI (React or Vue.js recommended)
-- Provides user authentication via OAuth (Microsoft, LinkedIn, GitHub as needed)
-- Displays dashboards for email, task, calendar, etc.
-- Clean navigation between all agent modules
-- Mobile-first design (using a framework like Tailwind CSS, Bootstrap, or Material-UI)
-
-### Backend
-- ASP.NET Core Web API (C#)
-- Exposes REST endpoints under `/api/agents/*`
-- Handles authentication, forwards calls securely to Azure Functions
-
-### Azure Functions
-- Core business logic for each major task and all external API calls
-- C# durable functions as needed for asynchronous tasks (e.g., background plan generation)
-- One function per feature:
-    - Send/Reply Email Function
-    - Task/Plan Generator Function
-    - Learning Material Creator Function
-    - Quote Generator Function
-    - Availability Lookup Function
-    - GitHub Issue Creator Function
-- All functions use per-user OAuth tokens, passed securely from backend
-- Errors and events logged to Application Insights
-
----
-
-## Example API Contracts (Copilot-Friendly)
-
-```csharp
-/// <summary>Input for sending a new email</summary>
-public class SendEmailRequest {
-    public string[] Recipients { get; set; }
-    public string Subject { get; set; }
-    public string Body { get; set; }
-    public List<IFormFile> Attachments { get; set; }
-}
-
-/// <summary>Input for creating a task with an execution plan</summary>
-public class CreateTaskRequest {
-    public string Title { get; set; }
-    public string Description { get; set; }
-    public DateTime? DueDate { get; set; }
-    // Copilot: Suggest adding field for task priority or tags
-}
-
-/// <summary>Input for learning material generation</summary>
-public class LearningMaterialRequest {
-    public string Topic { get; set; }
-    public string Audience { get; set; }
-    public string Format { get; set; } // e.g. "text", "outline", "slides"
-}
-
-/// <summary>Input for quote creation</summary>
-public class QuoteRequest {
-    public string Client { get; set; }
-    public List<QuoteLineItem> Items { get; set; }
-    public string Terms { get; set; }
-}
-
-/// <summary>Input for GitHub feature request</summary>
-public class FeatureRequest {
-    public string Title { get; set; }
-    public string Description { get; set; }
-    public string[] Labels { get; set; }
-    public string AssignedTo { get; set; } // e.g. "github copilot user"
-}
+# Terminal 2 - Frontend Dev Server
+cd src/frontend && npm run dev
 ```
 
----
+Visit http://localhost:5173 to access the Prodigy workspace.
 
-## Folder Structure
+## 📋 Table of Contents
 
+- [Features](#-features)
+- [Architecture](#-architecture)
+- [Quick Start](#-quick-start)
+- [Documentation](#-documentation)
+- [Development](#-development)
+- [Deployment](#-deployment)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+## ✨ Features
+
+### Intelligent Agents
+- **📧 Email Agent** - AI-powered email composition and replies with Microsoft Graph integration
+- **📝 Task Agent** - Smart task creation with automated execution planning
+- **📚 Learning Agent** - Dynamic learning material generation and knowledge management
+- **💰 Quote Agent** - Professional quote creation and client communication
+- **📅 Calendar Agent** - Intelligent availability lookup and meeting optimization
+- **🐙 GitHub Agent** - Feature request management and GitHub integration
+
+### Core Capabilities
+- **🎨 Personalization** - AI agents adapt to your writing style and preferences
+- **🔐 Enterprise Security** - JWT + Azure AD authentication with secure API access
+- **📱 Mobile-First** - Responsive design for desktop and mobile productivity
+- **🔌 API-First** - RESTful API with comprehensive Swagger documentation
+- **⚡ Real-Time** - Fast, modern React frontend with hot reload development
+
+## 🏗️ Architecture
+
+### Technology Stack
+- **Backend**: ASP.NET Core 8 Web API with JWT authentication
+- **Frontend**: React 19 + TypeScript with Vite build system
+- **Cloud**: Azure Functions for business logic (future enhancement)
+- **Integrations**: Microsoft Graph, LinkedIn API, GitHub REST API
+- **Database**: Configuration-based (environment dependent)
+
+### System Design
 ```
-/prodigy
-  /src
-    /frontend            # React/Vue.js sources
-    /backend             # ASP.NET Core Web API (C#)
-      /Controllers
-      /Models
-      /Services
-  /azure-functions       # C# Azure Functions project(s)
-    /EmailFunctions
-    /TaskFunctions
-    /LearningFunctions
-    /QuoteFunctions
-    /CalendarFunctions
-    /GitHubFunctions
-  /docs                  # Architecture, API reference, user guides
-  /.env.example          # Config template for required environment variables
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│   React Frontend │────│  ASP.NET Core    │────│ External APIs       │
+│   (Port 5173)    │    │  Backend API     │    │ • Microsoft Graph   │
+│                 │    │  (Port 5169)     │    │ • LinkedIn          │
+│                 │    │                  │    │ • GitHub            │
+└─────────────────┘    └──────────────────┘    └─────────────────────┘
+         │                       │                        │
+         │                       │                        │
+         ▼                       ▼                        ▼
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│   User Interface │    │  Agent Services  │    │ Azure Functions     │
+│   • Dashboard    │    │  • Email         │    │ (Future)            │
+│   • Agent Panel  │    │  • Tasks         │    │                     │
+│   • Settings     │    │  • Learning      │    │                     │
+└─────────────────┘    └──────────────────┘    └─────────────────────┘
 ```
 
+## 📚 Documentation
+
+### User Documentation
+- [User Guide](docs/USER_GUIDE.md) - Complete guide to using Prodigy's features
+- [Agent Overview](docs/AGENT_OVERVIEW.md) - Detailed information about each agent
+
+### Developer Documentation
+- [Developer Guide](docs/DEVELOPER_GUIDE.md) - Setup, development, and contribution guide
+- [API Reference](docs/API_REFERENCE.md) - Complete REST API documentation
+- [Architecture Guide](docs/ARCHITECTURE.md) - Technical system overview
+- [Frontend Guide](docs/FRONTEND_GUIDE.md) - React component and development guide
+
+### Deployment & Operations
+- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
+- [Environment Setup](docs/ENVIRONMENT_SETUP.md) - Configuration and secrets management
+- [Azure AD Configuration](docs/AZURE_AD_CONFIG.md) - Authentication setup guide
+
+### API-Specific Documentation
+- [Email Agent API](docs/API_EMAIL_AGENT.md) - Email operations and Microsoft Graph integration
+- [GitHub Feature Requests](docs/GITHUB_FEATURE_REQUEST_API.md) - GitHub integration details
+- [Personalization Profile](docs/PRODIGY_PERSONALIZATION_PROFILE.md) - AI personalization system
+
+## 🛠️ Development
+
+### Prerequisites
+- .NET 8 SDK
+- Node.js 20+
+- Git
+
+### Development Workflow
+```bash
+# Setup development environment
+dotnet restore
+cd src/frontend && npm install
+
+# Run in development mode
+cd src/backend && dotnet run  # API on http://localhost:5169
+cd src/frontend && npm run dev  # Frontend on http://localhost:5173
+
+# Build for production
+dotnet build --configuration Release
+cd src/frontend && npm run build
+
+# Run tests and linting
+cd src/frontend && npm run lint
+```
+
+### Project Structure
+```
+Prodigy/
+├── src/
+│   ├── backend/                # ASP.NET Core Web API
+│   │   ├── Controllers/        # API controllers for each agent
+│   │   ├── Models/            # DTOs and data models
+│   │   ├── Services/          # Business logic services
+│   │   └── Program.cs         # API startup and configuration
+│   └── frontend/              # React TypeScript application
+│       ├── src/               # React components and logic
+│       ├── public/            # Static assets
+│       └── package.json       # Frontend dependencies
+├── azure-functions/            # Azure Functions project (future)
+├── docs/                      # Comprehensive documentation
+├── .github/workflows/         # CI/CD pipeline configuration
+└── Prodigy.sln               # Visual Studio solution
+```
+
+### Key Development Resources
+- **API Documentation**: Swagger UI available at http://localhost:5169 when running backend
+- **Health Check**: http://localhost:5169/health
+- **Frontend Hot Reload**: Automatic refresh during development
+- **ESLint Configuration**: Consistent code style enforcement
+
+## 🚀 Deployment
+
+### Development Environment
+The application runs locally with:
+- Backend API: http://localhost:5169
+- Frontend: http://localhost:5173
+- Swagger Documentation: http://localhost:5169/swagger
+
+### Production Deployment
+See [Deployment Guide](docs/DEPLOYMENT.md) for detailed production deployment instructions including:
+- Azure App Service configuration
+- Environment variable setup
+- SSL/HTTPS configuration
+- CI/CD pipeline setup
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for:
+- Development setup
+- Coding standards
+- Pull request process
+- Issue reporting guidelines
+
+### Quick Contribution Steps
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 🛡️ Security
+
+- JWT-based authentication with Azure AD integration
+- Secure API endpoints with proper authorization
+- Environment-based configuration management
+- No secrets in source code
+- CORS configuration for frontend integration
+
+## 📧 Support
+
+- **Documentation**: Check our comprehensive [docs](docs/) directory
+- **Issues**: Report bugs and feature requests via GitHub Issues
+- **API Help**: Explore the interactive Swagger documentation
+- **Development**: See the [Developer Guide](docs/DEVELOPER_GUIDE.md)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ---
 
-## Security & Operations
+## 🎯 Vision
 
-- Store all secrets (API keys, client IDs/secrets) in environment variables or Azure Key Vault.
-- Never commit secrets or tokens.
-- Document authentication flow to provide Copilot/Contributors context.
-- Backend and functions perform strong validation/sanitization.
+**Prodigy** acts as your digital command center, staffed by intelligent agents that understand your work style and preferences. By automating repetitive tasks and integrating multiple services into one unified platform, Prodigy empowers you to focus on what matters most - your core work and creativity.
 
----
-
-## External Integrations
-
-- **Microsoft Graph API** (mail, tasks, calendar)
-- **LinkedIn API** (notifications, connections)
-- **GitHub REST API** (issues)
-- All via OAuth 2.0; tokens passed securely and never stored beyond session.
+> **Welcome to Prodigy! Digital agents at your command.** 🚀
 
 ---
 
-## Acceptance Criteria
-
-- [ ] User can authenticate with Microsoft and LinkedIn.
-- [ ] All major features work end-to-end via REST API and front-end UI.
-- [ ] Azure Functions correctly execute complex/async tasks (plan, learning, quote, availability, GitHub issue).
-- [ ] Fully responsive interface.
-- [ ] All code documented with XML doc comments for DTOs and endpoints.
-- [ ] Contributor guide and API reference included in `/docs`.
-
----
-
-## References & Resources
-
-- [Microsoft Graph API Docs](https://learn.microsoft.com/en-us/graph/)
-- [LinkedIn API Docs](https://docs.microsoft.com/en-us/linkedin/)
-- [GitHub REST API Docs](https://docs.github.com/en/rest/)
-- [Azure Functions C# Guide](https://learn.microsoft.com/en-us/azure/azure-functions/functions-dotnet-class-library)
-- [Copilot Doc Best Practices](https://docs.github.com/en/copilot)
-
----
-
-## Copilot Guidance
-
-- Wherever possible, use XML or markdown doc comments on methods, classes, and endpoints explaining:
-  - purpose
-  - input/output (with examples)
-  - links to relevant API endpoints
-- Provide sample payloads and usage for API endpoints directly in comments.
-- Favor explicit types, clear naming, and small focused functions, to help Copilot generate accurate completions and extensions.
-
----
-
-> **Welcome to Prodigy! Digital agents at your command.**
-
-
+*Built with ❤️ for productivity and powered by AI for intelligence.*
