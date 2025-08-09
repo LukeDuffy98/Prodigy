@@ -7,6 +7,13 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
+// Add HTTP client for Azure Functions
+builder.Services.AddHttpClient("AzureFunctions", client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["AZURE_FUNCTIONS_URL"] ?? "http://localhost:7071/api/");
+    client.DefaultRequestHeaders.Add("x-functions-key", builder.Configuration["AZURE_FUNCTIONS_KEY"] ?? "");
+});
+
 // Add CORS for frontend integration
 builder.Services.AddCors(options =>
 {
