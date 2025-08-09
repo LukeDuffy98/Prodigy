@@ -6,6 +6,9 @@ This guide provides step-by-step instructions for deploying Prodigy to Azure usi
 
 ### Prerequisites
 - Azure subscription with appropriate permissions
+  - **Subscription ID:** 782036da-846b-492b-99f4-43f86a3e5697
+- Resource group for deployment
+  - **Resource Group Name:** prodigy
 - Azure CLI installed and logged in
 - .NET 8 SDK installed
 - Node.js 20+ installed
@@ -81,7 +84,7 @@ Environment/
    az login
    
    # Set subscription (if multiple)
-   az account set --subscription "your-subscription-id"
+   az account set --subscription "782036da-846b-492b-99f4-43f86a3e5697"
    ```
 
 2. **Prepare environment variables**
@@ -104,7 +107,7 @@ Environment/
 1. **Create resource group**
    ```bash
    az group create \
-     --name "rg-prodigy-prod" \
+     --name "prodigy" \
      --location "East US"
    ```
 
@@ -129,7 +132,7 @@ Environment/
    
    # Deploy to App Service
    az webapp deployment source config-zip \
-     --resource-group "rg-prodigy-prod" \
+     --resource-group "prodigy" \
      --name "prodigy-prod-api" \
      --src ../backend-deploy.zip
    ```
@@ -153,7 +156,7 @@ Environment/
    zip -r ../functions-deploy.zip .
    
    az functionapp deployment source config-zip \
-     --resource-group "rg-prodigy-prod" \
+     --resource-group "prodigy" \
      --name "prodigy-prod-functions" \
      --src ../functions-deploy.zip
    ```
@@ -163,6 +166,9 @@ Environment/
 ### GitHub Actions Setup
 
 1. **Configure secrets in GitHub repository**
+
+   > **Note:** The required Azure secrets have been added to the repository settings in GitHub (Settings → Secrets and variables → Actions). This enables authentication and deployment via the workflow.
+
    ```
    AZURE_CREDENTIALS              # Service principal JSON
    AZURE_TENANT_ID                # Azure AD tenant ID
