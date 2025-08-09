@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 interface FeatureRequest {
   title: string;
@@ -79,10 +79,11 @@ const GitHubAgent: React.FC = () => {
         type: 'success', 
         text: `Feature request created successfully! Issue #${response.data.issueNumber}` 
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating feature request:', error);
-      const errorMessage = error.response?.data || 'Failed to create feature request. Check if GitHub token is configured.';
-      setMessage({ type: 'error', text: errorMessage });
+      const axiosError = error as AxiosError<string>;
+      const errorMessage = axiosError?.response?.data || 'Failed to create feature request. Check if GitHub token is configured.';
+      setMessage({ type: 'error', text: String(errorMessage) });
     } finally {
       setIsCreating(false);
     }

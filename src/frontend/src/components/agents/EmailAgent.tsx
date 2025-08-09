@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
+
+interface ApiError {
+  error?: string;
+  message?: string;
+}
 
 const EmailAgent: React.FC = () => {
   const [emailForm, setEmailForm] = useState({
@@ -15,7 +20,7 @@ const EmailAgent: React.FC = () => {
     
     try {
       setIsSending(true);
-      const response = await axios.post('/api/agents/email/send', {
+      await axios.post('/api/agents/email/send', {
         recipients: emailForm.recipients.split(',').map(r => r.trim()),
         subject: emailForm.subject,
         body: emailForm.body
@@ -27,9 +32,12 @@ const EmailAgent: React.FC = () => {
       
       setMessage('Email sent successfully!');
       setEmailForm({ recipients: '', subject: '', body: '' });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending email:', error);
-      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Error sending email';
+      const axiosError = error as AxiosError<ApiError>;
+      const errorMessage = axiosError?.response?.data?.error || 
+                          axiosError?.response?.data?.message || 
+                          'Error sending email';
       setMessage(`Error: ${errorMessage}`);
     } finally {
       setIsSending(false);
@@ -55,9 +63,12 @@ const EmailAgent: React.FC = () => {
       }));
       
       setMessage('AI draft generated! Review and edit as needed.');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error drafting email:', error);
-      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Error generating draft';
+      const axiosError = error as AxiosError<ApiError>;
+      const errorMessage = axiosError?.response?.data?.error || 
+                          axiosError?.response?.data?.message || 
+                          'Error generating draft';
       setMessage(`Error: ${errorMessage}`);
     }
     setTimeout(() => setMessage(''), 3000);
