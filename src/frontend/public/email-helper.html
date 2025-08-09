@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prodigy Email Helper</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f8fb;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #0078d4;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.2em;
+            letter-spacing: 1px;
+        }
+
+        .auth-section {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #e0e6ed;
+        }
+
+        .main-content {
+            display: none;
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e6ed;
+            border-radius: 5px;
+            background: #fafbfc;
+        }
+
+        .section h2 {
+            margin-top: 0;
+            color: #0078d4;
+        }
+
+        .email-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+
+        .email-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .email-item:hover {
+            background-color: #f0f7ff;
+        }
+
+        .email-item.unread {
+            font-weight: bold;
+        }
+
+        .email-details {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+            display: none;
+        }
+
+        .email-body {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #eee;
+            background: #f9f9f9;
+            margin: 10px 0;
+        }
+
+        .reply-section {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+            display: none;
+        }
+
+        button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #106ebe;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .user-info {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e8f4fd;
+            border-radius: 5px;
+        }
+
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Prodigy Smart Email Assistant</h1>
+            <p>AI-powered email management with Microsoft Graph integration</p>
+        </div>
+
+        <div class="auth-section">
+            <div id="loginSection">
+                <h3>Sign in with Microsoft to access your emails</h3>
+                <p>This application requires Microsoft Graph permissions to read and send emails.</p>
+                <button id="loginBtn">Login with Microsoft</button>
+            </div>
+            <div id="userInfo" class="user-info" style="display: none;"></div>
+            <button id="logoutBtn" style="display: none;" class="btn-secondary">Logout</button>
+        </div>
+
+        <div id="mainContent" class="main-content">
+            <div class="section">
+                <h2>Inbox</h2>
+                <button id="refreshBtn">Refresh Inbox</button>
+                <div id="emailList" class="email-list">
+                    <div class="loading">Loading emails...</div>
+                </div>
+            </div>
+
+            <div id="emailDetails" class="email-details">
+                <h3 id="emailSubject"></h3>
+                <p><strong>From:</strong> <span id="emailFrom"></span></p>
+                <p><strong>Date:</strong> <span id="emailDate"></span></p>
+                <div id="emailBody" class="email-body"></div>
+                <div>
+                    <button id="deleteBtn" class="btn-danger">Delete</button>
+                    <button id="replyBtn">Reply</button>
+                    <button id="replyAllBtn">Reply All</button>
+                </div>
+            </div>
+
+            <div id="replySection" class="reply-section">
+                <h3 id="replyTitle">Reply to Email</h3>
+                <div>
+                    <label for="userInput">Your response intent:</label>
+                    <textarea id="userInput" placeholder="Describe what you want to say in your reply..."></textarea>
+                </div>
+                <div style="margin: 10px 0;">
+                    <button id="generateAIBtn">Generate AI Draft</button>
+                </div>
+                <div>
+                    <label for="replyText">Email content:</label>
+                    <textarea id="replyText" placeholder="Your reply will appear here..."></textarea>
+                </div>
+                <div>
+                    <button id="sendReplyBtn">Send Reply</button>
+                    <button id="cancelReplyBtn" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+
+            <div id="messages"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin;
+        let accessToken = null;
+        let currentEmail = null;
+        let isReplyAll = false;
+
+        // DOM elements
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const loginSection = document.getElementById('loginSection');
+        const userInfo = document.getElementById('userInfo');
+        const mainContent = document.getElementById('mainContent');
+        const emailList = document.getElementById('emailList');
+        const emailDetails = document.getElementById('emailDetails');
+        const replySection = document.getElementById('replySection');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const messages = document.getElementById('messages');
+
+        // Initialize
+        window.addEventListener('load', checkAuthStatus);
+
+        // Authentication
+        function checkAuthStatus() {
+            const token = localStorage.getItem('accessToken');
+            if (token) {
+                accessToken = token;
+                validateToken(token);
+            }
+        }
+
+        async function validateToken(token) {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/validate-token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ accessToken: token })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showUserInfo(data);
+                    loadInbox();
+                } else {
+                    localStorage.removeItem('accessToken');
+                    accessToken = null;
+                }
+            } catch (error) {
+                console.error('Token validation failed:', error);
+                localStorage.removeItem('accessToken');
+                accessToken = null;
+            }
+        }
+
+        loginBtn.addEventListener('click', () => {
+            // This would integrate with MSAL.js in a real implementation
+            // For demo purposes, we'll prompt for a token
+            const token = prompt('Please enter your Microsoft Graph access token:');
+            if (token) {
+                accessToken = token;
+                localStorage.setItem('accessToken', token);
+                validateToken(token);
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('accessToken');
+            accessToken = null;
+            showLoginSection();
+        });
+
+        function showUserInfo(userData) {
+            userInfo.innerHTML = `Logged in as: ${userData.UserName || userData.UserEmail}`;
+            userInfo.style.display = 'block';
+            loginSection.style.display = 'none';
+            logoutBtn.style.display = 'inline-block';
+            mainContent.style.display = 'block';
+        }
+
+        function showLoginSection() {
+            userInfo.style.display = 'none';
+            loginSection.style.display = 'block';
+            logoutBtn.style.display = 'none';
+            mainContent.style.display = 'none';
+        }
+
+        // Email functions
+        refreshBtn.addEventListener('click', loadInbox);
+
+        async function loadInbox() {
+            try {
+                emailList.innerHTML = '<div class="loading">Loading emails...</div>';
+                
+                const response = await fetch(`${API_BASE}/api/agents/email/inbox?top=50`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const emails = await response.json();
+                    displayEmails(emails);
+                } else {
+                    throw new Error('Failed to load emails');
+                }
+            } catch (error) {
+                showMessage(`Error loading emails: ${error.message}`, 'error');
+                emailList.innerHTML = '<div class="error">Failed to load emails</div>';
+            }
+        }
+
+        function displayEmails(emails) {
+            if (emails.length === 0) {
+                emailList.innerHTML = '<div style="padding: 20px; text-align: center;">No emails found</div>';
+                return;
+            }
+
+            emailList.innerHTML = emails.map(email => `
+                <div class="email-item ${!email.isRead ? 'unread' : ''}" onclick="showEmailDetails('${email.id}')">
+                    <div><strong>${email.subject || '(No subject)'}</strong></div>
+                    <div>${email.from.name || email.from.address}</div>
+                    <div><small>${new Date(email.receivedDateTime).toLocaleString()}</small></div>
+                </div>
+            `).join('');
+        }
+
+        async function showEmailDetails(messageId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/agents/email/details/${messageId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const email = await response.json();
+                    currentEmail = email;
+                    displayEmailDetails(email);
+                } else {
+                    throw new Error('Failed to load email details');
+                }
+            } catch (error) {
+                showMessage(`Error loading email details: ${error.message}`, 'error');
+            }
+        }
+
+        function displayEmailDetails(email) {
+            document.getElementById('emailSubject').textContent = email.subject || '(No subject)';
+            document.getElementById('emailFrom').textContent = `${email.from.name || email.from.address}`;
+            document.getElementById('emailDate').textContent = new Date(email.receivedDateTime).toLocaleString();
+            document.getElementById('emailBody').innerHTML = email.body.content || '(No content)';
+            
+            emailDetails.style.display = 'block';
+            replySection.style.display = 'none';
+        }
+
+        // Reply functions
+        document.getElementById('replyBtn').addEventListener('click', () => startReply(false));
+        document.getElementById('replyAllBtn').addEventListener('click', () => startReply(true));
+        document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
+
+        function startReply(replyAll) {
+            if (!currentEmail) return;
+            
+            isReplyAll = replyAll;
+            document.getElementById('replyTitle').textContent = replyAll ? 'Reply All' : 'Reply to Email';
+            document.getElementById('userInput').value = '';
+            document.getElementById('replyText').value = '';
+            replySection.style.display = 'block';
+        }
+
+        function cancelReply() {
+            replySection.style.display = 'none';
+        }
+
+        document.getElementById('generateAIBtn').addEventListener('click', async () => {
+            const userInput = document.getElementById('userInput').value.trim();
+            if (!userInput) {
+                showMessage('Please describe what you want to say in your reply.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/agents/email/generate-ai-draft`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        originalBody: currentEmail.body.content,
+                        userInput: userInput,
+                        originalSubject: currentEmail.subject,
+                        originalSender: currentEmail.from.address
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    document.getElementById('replyText').value = result.draft;
+                    showMessage('AI draft generated successfully!', 'success');
+                } else {
+                    throw new Error('Failed to generate AI draft');
+                }
+            } catch (error) {
+                showMessage(`Error generating AI draft: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('sendReplyBtn').addEventListener('click', async () => {
+            const replyText = document.getElementById('replyText').value.trim();
+            if (!replyText) {
+                showMessage('Please enter a reply message.', 'error');
+                return;
+            }
+
+            try {
+                const endpoint = isReplyAll ? 'reply-all' : 'reply';
+                const response = await fetch(`${API_BASE}/api/agents/email/${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        originalMessageId: currentEmail.id,
+                        body: replyText
+                    })
+                });
+
+                if (response.ok) {
+                    showMessage('Reply sent successfully!', 'success');
+                    cancelReply();
+                    loadInbox(); // Refresh inbox
+                } else {
+                    throw new Error('Failed to send reply');
+                }
+            } catch (error) {
+                showMessage(`Error sending reply: ${error.message}`, 'error');
+            }
+        });
+
+        // Delete function
+        document.getElementById('deleteBtn').addEventListener('click', async () => {
+            if (!currentEmail || !confirm('Are you sure you want to delete this email?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/agents/email/delete/${currentEmail.id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    showMessage('Email deleted successfully!', 'success');
+                    emailDetails.style.display = 'none';
+                    currentEmail = null;
+                    loadInbox(); // Refresh inbox
+                } else {
+                    throw new Error('Failed to delete email');
+                }
+            } catch (error) {
+                showMessage(`Error deleting email: ${error.message}`, 'error');
+            }
+        });
+
+        // Utility functions
+        function showMessage(message, type) {
+            const messageEl = document.createElement('div');
+            messageEl.className = type;
+            messageEl.textContent = message;
+            messages.appendChild(messageEl);
+            
+            setTimeout(() => {
+                messageEl.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
