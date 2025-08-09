@@ -1,0 +1,264 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+
+env:
+  AZURE_RESOURCE_GROUP: 'rg-prodigy-prod'
+  AZURE_LOCATION: 'East US'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.x'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+
+    - name: Restore .NET dependencies
+      run: dotnet restore
+
+    - name: Build .NET solution
+      run: dotnet build --no-restore
+
+    - name: Install frontend dependencies
+      run: |
+        cd src/frontend
+        npm ci
+
+    - name: Build frontend
+      run: |
+        cd src/frontend
+        npm run build
+
+    - name: Run frontend linting
+      run: |
+        cd src/frontend
+        npm run lint
+
+    - name: Upload backend artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: backend-artifacts
+        path: |
+          src/backend/bin/Release/net8.0/publish/
+          !src/backend/bin/Release/net8.0/publish/**/*.pdb
+
+    - name: Upload frontend artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-artifacts
+        path: src/frontend/dist/
+
+    - name: Upload functions artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: functions-artifacts
+        path: |
+          azure-functions/bin/Release/net8.0/publish/
+          !azure-functions/bin/Release/net8.0/publish/**/*.pdb
+
+  deploy-infrastructure:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    outputs:
+      backend-url: ${{ steps.deploy-bicep.outputs.backendUrl }}
+      frontend-url: ${{ steps.deploy-bicep.outputs.frontendUrl }}
+      functions-url: ${{ steps.deploy-bicep.outputs.functionsUrl }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Create Resource Group
+      run: |
+        az group create \
+          --name ${{ env.AZURE_RESOURCE_GROUP }} \
+          --location "${{ env.AZURE_LOCATION }}"
+
+    - name: Deploy Bicep template
+      id: deploy-bicep
+      run: |
+        deployment_output=$(az deployment group create \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --template-file azure/main.bicep \
+          --parameters \
+            appName=prodigy \
+            environment=prod \
+            location="${{ env.AZURE_LOCATION }}" \
+            azureTenantId="${{ secrets.AZURE_TENANT_ID }}" \
+            azureClientId="${{ secrets.AZURE_CLIENT_ID }}" \
+            azureClientSecret="${{ secrets.AZURE_CLIENT_SECRET }}" \
+            jwtSecretKey="${{ secrets.JWT_SECRET_KEY }}" \
+            githubToken="${{ secrets.GITHUB_TOKEN }}" \
+            linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID }}" \
+            linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
+          --query properties.outputs \
+          --output json)
+        
+        echo "backendUrl=$(echo $deployment_output | jq -r '.backendUrl.value')" >> $GITHUB_OUTPUT
+        echo "frontendUrl=$(echo $deployment_output | jq -r '.frontendUrl.value')" >> $GITHUB_OUTPUT
+        echo "functionsUrl=$(echo $deployment_output | jq -r '.functionsUrl.value')" >> $GITHUB_OUTPUT
+
+  deploy-backend:
+    needs: [build-and-test, deploy-infrastructure]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download backend artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: backend-artifacts
+        path: ./backend-artifacts
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.x'
+
+    - name: Publish backend
+      run: |
+        cd src/backend
+        dotnet publish -c Release -o ../../publish-backend
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy to Azure App Service
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: 'prodigy-prod-api'
+        package: './publish-backend'
+
+  deploy-frontend:
+    needs: [build-and-test, deploy-infrastructure]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download frontend artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-artifacts
+        path: ./frontend-artifacts
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy to Azure Static Web Apps
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: "upload"
+        app_location: "./frontend-artifacts"
+        skip_app_build: true
+
+  deploy-functions:
+    needs: [build-and-test, deploy-infrastructure]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download functions artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: functions-artifacts
+        path: ./functions-artifacts
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.x'
+
+    - name: Publish functions
+      run: |
+        cd azure-functions
+        dotnet publish -c Release -o ../publish-functions
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Deploy to Azure Functions
+      uses: Azure/functions-action@v1
+      with:
+        app-name: 'prodigy-prod-functions'
+        package: './publish-functions'
+
+  verify-deployment:
+    needs: [deploy-backend, deploy-frontend, deploy-functions]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Verify backend health
+      run: |
+        echo "Checking backend health..."
+        curl -f ${{ needs.deploy-infrastructure.outputs.backend-url }}/health || exit 1
+        echo "Backend is healthy"
+
+    - name: Verify frontend
+      run: |
+        echo "Checking frontend..."
+        curl -f ${{ needs.deploy-infrastructure.outputs.frontend-url }} || exit 1
+        echo "Frontend is accessible"
+
+    - name: Create deployment summary
+      run: |
+        echo "## Deployment Successful! 🚀" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Deployed URLs:" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backend API**: ${{ needs.deploy-infrastructure.outputs.backend-url }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Frontend**: ${{ needs.deploy-infrastructure.outputs.frontend-url }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Functions**: ${{ needs.deploy-infrastructure.outputs.functions-url }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
+        echo "1. Verify all services are working correctly" >> $GITHUB_STEP_SUMMARY
+        echo "2. Configure custom domain names if needed" >> $GITHUB_STEP_SUMMARY
+        echo "3. Set up monitoring and alerts" >> $GITHUB_STEP_SUMMARY

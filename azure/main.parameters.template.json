@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "prodigy"
+    },
+    "environment": {
+      "value": "prod"
+    },
+    "location": {
+      "value": "East US"
+    },
+    "appServicePlanSku": {
+      "value": "B2"
+    },
+    "azureTenantId": {
+      "value": "REPLACE_WITH_YOUR_TENANT_ID"
+    },
+    "azureClientId": {
+      "value": "REPLACE_WITH_YOUR_CLIENT_ID"
+    },
+    "azureClientSecret": {
+      "value": "REPLACE_WITH_YOUR_CLIENT_SECRET"
+    },
+    "jwtSecretKey": {
+      "value": "REPLACE_WITH_YOUR_JWT_SECRET_KEY"
+    },
+    "githubToken": {
+      "value": "REPLACE_WITH_YOUR_GITHUB_TOKEN"
+    },
+    "linkedinClientId": {
+      "value": "REPLACE_WITH_YOUR_LINKEDIN_CLIENT_ID"
+    },
+    "linkedinClientSecret": {
+      "value": "REPLACE_WITH_YOUR_LINKEDIN_CLIENT_SECRET"
+    }
+  }
+}

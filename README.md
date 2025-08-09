@@ -158,18 +158,40 @@ Prodigy/
 
 ## 🚀 Deployment
 
-### Development Environment
+### Local Development
 The application runs locally with:
 - Backend API: http://localhost:5169
 - Frontend: http://localhost:5173
 - Swagger Documentation: http://localhost:5169/swagger
 
-### Production Deployment
-See [Deployment Guide](docs/DEPLOYMENT.md) for detailed production deployment instructions including:
-- Azure App Service configuration
-- Environment variable setup
-- SSL/HTTPS configuration
-- CI/CD pipeline setup
+### Azure Production Deployment 🌥️
+
+**One-Click Azure Deployment:**
+```bash
+# Set up environment variables
+cp .env.prod.example .env
+# Edit .env with your Azure credentials
+
+# Deploy to Azure
+./scripts/deploy-azure.sh
+```
+
+**What gets deployed:**
+- 🔧 **App Service** - Backend API (.NET 8)
+- 📱 **Static Web App** - Frontend (React)
+- ⚡ **Azure Functions** - Business logic
+- 🔐 **Key Vault** - Secure secret storage
+- 📊 **Application Insights** - Monitoring
+
+**Alternative deployment methods:**
+- **GitHub Actions**: Automated CI/CD on push to main
+- **Docker**: `docker-compose up --build` for containerized deployment
+- **Manual**: Step-by-step Azure CLI commands
+
+### Documentation
+- 📖 [Azure Deployment Guide](docs/AZURE_DEPLOYMENT.md) - Complete Azure setup
+- 🏗️ [General Deployment Guide](docs/DEPLOYMENT.md) - All deployment options
+- 🔧 [Azure Files Reference](azure/README.md) - Infrastructure files overview
 
 ## 🤝 Contributing
 

@@ -1,0 +1,362 @@
+@description('Name of the application')
+param appName string = 'prodigy'
+
+@description('Environment name (dev, staging, prod)')
+param environment string = 'prod'
+
+@description('Azure region for resource deployment')
+param location string = resourceGroup().location
+
+@description('App Service Plan SKU')
+param appServicePlanSku string = 'B2'
+
+@description('Azure AD Tenant ID')
+@secure()
+param azureTenantId string
+
+@description('Azure AD Client ID')
+@secure()
+param azureClientId string
+
+@description('Azure AD Client Secret')
+@secure()
+param azureClientSecret string
+
+@description('JWT Secret Key')
+@secure()
+param jwtSecretKey string
+
+@description('GitHub Token for API access')
+@secure()
+param githubToken string
+
+@description('LinkedIn Client ID')
+@secure()
+param linkedinClientId string
+
+@description('LinkedIn Client Secret')
+@secure()
+param linkedinClientSecret string
+
+// Variables
+var resourcePrefix = '${appName}-${environment}'
+var keyVaultName = '${resourcePrefix}-kv-${uniqueString(resourceGroup().id)}'
+var appServicePlanName = '${resourcePrefix}-asp'
+var backendAppName = '${resourcePrefix}-api'
+var frontendAppName = '${resourcePrefix}-frontend'
+var functionsAppName = '${resourcePrefix}-functions'
+var storageAccountName = '${replace(resourcePrefix, '-', '')}st${uniqueString(resourceGroup().id)}'
+var applicationInsightsName = '${resourcePrefix}-ai'
+var logAnalyticsWorkspaceName = '${resourcePrefix}-law'
+
+// Log Analytics Workspace for Application Insights
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: logAnalyticsWorkspaceName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+// Application Insights for monitoring
+resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: applicationInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspace.id
+  }
+}
+
+// Storage Account for Azure Functions
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+  name: storageAccountName
+  location: location
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
+  properties: {
+    supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
+  }
+}
+
+// Key Vault for secrets management
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+  name: keyVaultName
+  location: location
+  properties: {
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    tenantId: subscription().tenantId
+    accessPolicies: []
+    enabledForDeployment: false
+    enabledForTemplateDeployment: true
+    enabledForDiskEncryption: false
+    enableRbacAuthorization: true
+  }
+}
+
+// App Service Plan
+resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
+  name: appServicePlanName
+  location: location
+  sku: {
+    name: appServicePlanSku
+  }
+  kind: 'linux'
+  properties: {
+    reserved: true
+  }
+}
+
+// Backend API App Service
+resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
+  name: backendAppName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      linuxFxVersion: 'DOTNETCORE|8.0'
+      alwaysOn: true
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+      appSettings: [
+        {
+          name: 'ASPNETCORE_ENVIRONMENT'
+          value: 'Production'
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: applicationInsights.properties.ConnectionString
+        }
+        {
+          name: 'AZURE_TENANT_ID'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-tenant-id)'
+        }
+        {
+          name: 'AZURE_CLIENT_ID'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-client-id)'
+        }
+        {
+          name: 'AZURE_CLIENT_SECRET'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-client-secret)'
+        }
+        {
+          name: 'JWT_SECRET_KEY'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=jwt-secret-key)'
+        }
+        {
+          name: 'GITHUB_TOKEN'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=github-token)'
+        }
+        {
+          name: 'LINKEDIN_CLIENT_ID'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=linkedin-client-id)'
+        }
+        {
+          name: 'LINKEDIN_CLIENT_SECRET'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=linkedin-client-secret)'
+        }
+        {
+          name: 'JWT_ISSUER'
+          value: 'Prodigy'
+        }
+        {
+          name: 'JWT_AUDIENCE'
+          value: 'ProdigyUsers'
+        }
+        {
+          name: 'MICROSOFT_GRAPH_API_URL'
+          value: 'https://graph.microsoft.com/v1.0'
+        }
+        {
+          name: 'GITHUB_API_URL'
+          value: 'https://api.github.com'
+        }
+        {
+          name: 'GITHUB_REPO_OWNER'
+          value: 'LukeDuffy98'
+        }
+        {
+          name: 'GITHUB_REPO_NAME'
+          value: 'Prodigy'
+        }
+      ]
+    }
+  }
+}
+
+// Static Web App for Frontend
+resource frontendApp 'Microsoft.Web/staticSites@2023-12-01' = {
+  name: frontendAppName
+  location: location
+  sku: {
+    name: 'Standard'
+    tier: 'Standard'
+  }
+  properties: {
+    buildProperties: {
+      appLocation: '/src/frontend'
+      outputLocation: 'dist'
+      appBuildCommand: 'npm run build'
+    }
+    repositoryUrl: 'https://github.com/LukeDuffy98/Prodigy'
+    branch: 'main'
+  }
+}
+
+// Azure Functions App
+resource functionsApp 'Microsoft.Web/sites@2023-12-01' = {
+  name: functionsAppName
+  location: location
+  kind: 'functionapp,linux'
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      linuxFxVersion: 'DOTNET-ISOLATED|8.0'
+      alwaysOn: false
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+      appSettings: [
+        {
+          name: 'AzureWebJobsStorage'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
+          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+        }
+        {
+          name: 'WEBSITE_CONTENTSHARE'
+          value: toLower(functionsAppName)
+        }
+        {
+          name: 'FUNCTIONS_EXTENSION_VERSION'
+          value: '~4'
+        }
+        {
+          name: 'FUNCTIONS_WORKER_RUNTIME'
+          value: 'dotnet-isolated'
+        }
+        {
+          name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+          value: applicationInsights.properties.ConnectionString
+        }
+        {
+          name: 'AZURE_TENANT_ID'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-tenant-id)'
+        }
+        {
+          name: 'AZURE_CLIENT_ID'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-client-id)'
+        }
+        {
+          name: 'AZURE_CLIENT_SECRET'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-client-secret)'
+        }
+      ]
+    }
+  }
+}
+
+// Key Vault Secrets
+resource azureTenantIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'azure-tenant-id'
+  properties: {
+    value: azureTenantId
+  }
+}
+
+resource azureClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'azure-client-id'
+  properties: {
+    value: azureClientId
+  }
+}
+
+resource azureClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'azure-client-secret'
+  properties: {
+    value: azureClientSecret
+  }
+}
+
+resource jwtSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'jwt-secret-key'
+  properties: {
+    value: jwtSecretKey
+  }
+}
+
+resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'github-token'
+  properties: {
+    value: githubToken
+  }
+}
+
+resource linkedinClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'linkedin-client-id'
+  properties: {
+    value: linkedinClientId
+  }
+}
+
+resource linkedinClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+  parent: keyVault
+  name: 'linkedin-client-secret'
+  properties: {
+    value: linkedinClientSecret
+  }
+}
+
+// Role assignments for Key Vault access
+resource backendKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, backendApp.id, 'Key Vault Secrets User')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
+    principalId: backendApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource functionsKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, functionsApp.id, 'Key Vault Secrets User')
+  scope: keyVault
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
+    principalId: functionsApp.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Outputs
+output backendUrl string = 'https://${backendApp.properties.defaultHostName}'
+output frontendUrl string = 'https://${frontendApp.properties.defaultHostname}'
+output functionsUrl string = 'https://${functionsApp.properties.defaultHostName}'
+output keyVaultName string = keyVault.name
+output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
+output resourceGroupName string = resourceGroup().name

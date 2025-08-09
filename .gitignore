@@ -71,46 +71,19 @@ yarn-debug.log*
 # Azure Functions
 local.settings.json
 
-# Ignore build output and compiled assets
-azure-functions/bin/
-azure-functions/obj/
-src/backend/bin/
-src/backend/obj/
-*.dll
-*.pdb
-*.cache
-*.sourcelink.json
-*.AssemblyInfo.cs
-*.AssemblyInfoInputs.cache
-*.GeneratedMSBuildEditorConfig.editorconfig
-*.GlobalUsings.g.cs
-*.assets.cache
-*.nuget.g.props
-*.nuget.g.targets
-*.nuget.dgspec.json
-*.nuget.cache
-*.json
-*.ref/
-*.refint/
+# Deployment artifacts
+publish-backend/
+publish-functions/
+publish-frontend/
+*.zip
+backend-deploy.zip
+frontend-deploy.zip
+functions-deploy.zip
 
-# Ignore build output and compiled assets
-azure-functions/bin/
-azure-functions/obj/
-src/backend/bin/
-src/backend/obj/
-*.dll
-*.pdb
-*.cache
-*.sourcelink.json
-*.AssemblyInfo.cs
-*.AssemblyInfoInputs.cache
-*.GeneratedMSBuildEditorConfig.editorconfig
-*.GlobalUsings.g.cs
-*.assets.cache
-*.nuget.g.props
-*.nuget.g.targets
-*.nuget.dgspec.json
-*.nuget.cache
-*.json
-*.ref/
-*.refint/
+# Environment-specific files
+.env.prod
+.env.staging
+.env.dev
+
+# Azure deployment parameters with secrets
+azure/main.parameters.json
