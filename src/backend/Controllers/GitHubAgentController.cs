@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Prodigy.Backend.Models;
+using System.Text.Json;
+using System.Text;
 
 namespace Prodigy.Backend.Controllers;
 
@@ -13,10 +15,12 @@ namespace Prodigy.Backend.Controllers;
 public class GitHubAgentController : ControllerBase
 {
     private readonly ILogger<GitHubAgentController> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public GitHubAgentController(ILogger<GitHubAgentController> logger)
+    public GitHubAgentController(ILogger<GitHubAgentController> logger, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <summary>
@@ -43,28 +47,52 @@ public class GitHubAgentController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            // TODO: Implement GitHub REST API integration for issue creation
-            // TODO: Apply user's PersonalizationProfile to issue content and formatting
-            // TODO: Forward request to Azure Function for GitHub API calls with proper authentication
-
-            var issueNumber = Random.Shared.Next(1000, 9999); // Simulate GitHub issue number
-            var repositoryUrl = "https://github.com/LukeDuffy98/Prodigy"; // Should be configurable
-            var issueUrl = $"{repositoryUrl}/issues/{issueNumber}";
-
-            var response = new FeatureRequestResponse
-            {
-                IssueNumber = issueNumber,
-                IssueUrl = issueUrl,
-                Title = request.Title,
-                State = "open",
-                AssignedTo = request.AssignedTo,
-                Labels = request.Labels,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _logger.LogInformation("Created GitHub feature request #{IssueNumber}: {Title}", issueNumber, request.Title);
+            var client = _httpClientFactory.CreateClient("AzureFunctions");
             
-            return CreatedAtAction(nameof(GetFeatureRequest), new { issueNumber }, response);
+            // Forward auth header if present
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader))
+            {
+                client.DefaultRequestHeaders.Add("Authorization", authHeader);
+            }
+
+            var json = JsonSerializer.Serialize(new
+            {
+                Title = request.Title,
+                Description = request.Description,
+                Labels = request.Labels,
+                AssignedTo = request.AssignedTo,
+                Priority = request.Priority,
+                Milestone = request.Milestone
+            });
+
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await client.PostAsync("CreateFeatureRequest", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<FeatureRequestResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                _logger.LogInformation("Created GitHub feature request #{IssueNumber}: {Title}", result?.IssueNumber, request.Title);
+                return CreatedAtAction(nameof(GetFeatureRequest), new { issueNumber = result?.IssueNumber }, result);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Azure Function call failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                
+                return response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.Unauthorized => Unauthorized("GitHub authentication failed"),
+                    System.Net.HttpStatusCode.Forbidden => Forbid("Insufficient GitHub permissions"),
+                    System.Net.HttpStatusCode.BadRequest => BadRequest(errorContent),
+                    _ => StatusCode(500, "An error occurred while creating the feature request")
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -87,10 +115,38 @@ public class GitHubAgentController : ControllerBase
     {
         try
         {
-            // TODO: Implement GitHub REST API integration for issue retrieval
-            _logger.LogInformation("Retrieving GitHub feature request #{IssueNumber}", issueNumber);
+            var client = _httpClientFactory.CreateClient("AzureFunctions");
             
-            return NotFound($"Feature request #{issueNumber} not found");
+            // Forward auth header if present
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader))
+            {
+                client.DefaultRequestHeaders.Add("Authorization", authHeader);
+            }
+
+            var response = await client.GetAsync($"github/issue/{issueNumber}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<FeatureRequestResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                _logger.LogInformation("Retrieved GitHub feature request #{IssueNumber}", issueNumber);
+                return Ok(result);
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return NotFound($"Feature request #{issueNumber} not found");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Azure Function call failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                return StatusCode(500, "An error occurred while retrieving the feature request");
+            }
         }
         catch (Exception ex)
         {
@@ -121,11 +177,49 @@ public class GitHubAgentController : ControllerBase
                 return BadRequest(ModelState);
             }
 
-            // TODO: Implement GitHub REST API integration for issue updates
-            // TODO: Apply user's PersonalizationProfile to updated content
-            _logger.LogInformation("Updating GitHub feature request #{IssueNumber}", issueNumber);
+            var client = _httpClientFactory.CreateClient("AzureFunctions");
             
-            return NotFound($"Feature request #{issueNumber} not found");
+            // Forward auth header if present
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader))
+            {
+                client.DefaultRequestHeaders.Add("Authorization", authHeader);
+            }
+
+            var json = JsonSerializer.Serialize(new
+            {
+                Title = request.Title,
+                Description = request.Description,
+                Labels = request.Labels,
+                AssignedTo = request.AssignedTo,
+                Priority = request.Priority,
+                Milestone = request.Milestone
+            });
+
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await client.PutAsync($"github/issue/{issueNumber}", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<FeatureRequestResponse>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                _logger.LogInformation("Updated GitHub feature request #{IssueNumber}", issueNumber);
+                return Ok(result);
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return NotFound($"Feature request #{issueNumber} not found");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Azure Function call failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                return BadRequest("Failed to update feature request");
+            }
         }
         catch (Exception ex)
         {
@@ -151,35 +245,46 @@ public class GitHubAgentController : ControllerBase
     {
         try
         {
-            // TODO: Implement GitHub REST API integration for listing issues
-            // TODO: Apply proper filtering based on query parameters
+            var client = _httpClientFactory.CreateClient("AzureFunctions");
             
-            var sampleRequests = new FeatureRequestResponse[]
+            // Forward auth header if present
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader))
             {
-                new() {
-                    IssueNumber = 1001,
-                    IssueUrl = "https://github.com/LukeDuffy98/Prodigy/issues/1001",
-                    Title = "Add dark mode theme support",
-                    State = "open",
-                    AssignedTo = "github-copilot",
-                    Labels = new[] { "enhancement", "ui" },
-                    CreatedAt = DateTime.UtcNow.AddDays(-5)
-                },
-                new() {
-                    IssueNumber = 1002,
-                    IssueUrl = "https://github.com/LukeDuffy98/Prodigy/issues/1002",
-                    Title = "Improve mobile responsiveness",
-                    State = "open",
-                    AssignedTo = "",
-                    Labels = new[] { "enhancement", "mobile" },
-                    CreatedAt = DateTime.UtcNow.AddDays(-3)
-                }
-            };
+                client.DefaultRequestHeaders.Add("Authorization", authHeader);
+            }
 
-            _logger.LogInformation("Retrieved {RequestCount} feature requests with filters - state: {State}, assignee: {Assignee}", 
-                sampleRequests.Length, state, assignee ?? "none");
+            var queryParams = new List<string>();
+            queryParams.Add($"state={Uri.EscapeDataString(state)}");
             
-            return Ok(sampleRequests);
+            if (!string.IsNullOrEmpty(assignee))
+                queryParams.Add($"assignee={Uri.EscapeDataString(assignee)}");
+            
+            if (!string.IsNullOrEmpty(labels))
+                queryParams.Add($"labels={Uri.EscapeDataString(labels)}");
+
+            var queryString = string.Join("&", queryParams);
+            var response = await client.GetAsync($"ListFeatureRequests?{queryString}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var results = JsonSerializer.Deserialize<FeatureRequestResponse[]>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                }) ?? Array.Empty<FeatureRequestResponse>();
+
+                _logger.LogInformation("Retrieved {RequestCount} feature requests with filters - state: {State}, assignee: {Assignee}", 
+                    results.Length, state, assignee ?? "none");
+                
+                return Ok(results);
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Azure Function call failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                return StatusCode(500, "An error occurred while listing feature requests");
+            }
         }
         catch (Exception ex)
         {
@@ -210,20 +315,18 @@ public class GitHubAgentController : ControllerBase
                 return BadRequest("Comment content cannot be empty");
             }
 
-            // TODO: Implement GitHub REST API integration for adding comments
-            // TODO: Apply user's PersonalizationProfile to comment content
-            
+            // For now, return a placeholder as this would require extending the Azure Function
             var commentResult = new
             {
                 Id = Random.Shared.Next(10000, 99999),
                 IssueNumber = issueNumber,
                 Content = comment,
                 CreatedAt = DateTime.UtcNow,
-                Author = "current-user", // Should be actual authenticated user
-                Url = $"https://github.com/LukeDuffy98/Prodigy/issues/{issueNumber}#issuecomment-{Random.Shared.Next(10000, 99999)}"
+                Author = "current-user",
+                Message = "Comment functionality would be implemented in future Azure Function extension"
             };
 
-            _logger.LogInformation("Added comment to GitHub feature request #{IssueNumber}", issueNumber);
+            _logger.LogInformation("Simulated adding comment to GitHub feature request #{IssueNumber}", issueNumber);
             
             return CreatedAtAction(nameof(GetFeatureRequest), new { issueNumber }, commentResult);
         }
@@ -250,21 +353,35 @@ public class GitHubAgentController : ControllerBase
     {
         try
         {
-            // TODO: Implement GitHub REST API integration for closing issues
-            // TODO: Apply user's PersonalizationProfile to closing comment if provided
+            var client = _httpClientFactory.CreateClient("AzureFunctions");
             
-            var result = new
+            // Forward auth header if present
+            var authHeader = Request.Headers.Authorization.FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader))
             {
-                IssueNumber = issueNumber,
-                State = "closed",
-                ClosedAt = DateTime.UtcNow,
-                Reason = reason,
-                Comment = comment
-            };
+                client.DefaultRequestHeaders.Add("Authorization", authHeader);
+            }
 
-            _logger.LogInformation("Closed GitHub feature request #{IssueNumber} with reason: {Reason}", issueNumber, reason);
-            
-            return Ok(result);
+            var response = await client.PostAsync($"github/issue/{issueNumber}/close", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<object>(responseContent);
+
+                _logger.LogInformation("Closed GitHub feature request #{IssueNumber} with reason: {Reason}", issueNumber, reason);
+                return Ok(result);
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return NotFound($"Feature request #{issueNumber} not found");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError("Azure Function call failed: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                return StatusCode(500, "An error occurred while closing the feature request");
+            }
         }
         catch (Exception ex)
         {
