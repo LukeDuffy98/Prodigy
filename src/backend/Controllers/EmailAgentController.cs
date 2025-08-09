@@ -57,7 +57,7 @@ public class EmailAgentController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending email");
-            return StatusCode(500, "An error occurred while sending the email");
+            return StatusCode(500, new { error = "An error occurred while sending the email", details = ex.Message });
         }
     }
 
@@ -102,7 +102,7 @@ public class EmailAgentController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error replying to email");
-            return StatusCode(500, "An error occurred while replying to the email");
+            return StatusCode(500, new { error = "An error occurred while replying to the email", details = ex.Message });
         }
     }
 
@@ -110,20 +110,25 @@ public class EmailAgentController : ControllerBase
     /// Drafts an email using AI with personalization but does not send it.
     /// Uses the user's PersonalizationProfile to generate content in their voice.
     /// </summary>
-    /// <param name="prompt">Description of what the email should accomplish</param>
+    /// <param name="request">Request containing the prompt and optional context</param>
     /// <returns>AI-generated email draft with personalized content</returns>
     /// <response code="200">Email draft generated successfully</response>
     /// <response code="400">Invalid prompt provided</response>
     [HttpPost("draft")]
     [ProducesResponseType(typeof(SendEmailRequest), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<SendEmailRequest>> DraftEmail([FromBody] string prompt)
+    public async Task<ActionResult<SendEmailRequest>> DraftEmail([FromBody] DraftEmailRequest request)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(prompt))
+            if (!ModelState.IsValid)
             {
-                return BadRequest("Prompt cannot be empty");
+                return BadRequest(ModelState);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Prompt))
+            {
+                return BadRequest(new { error = "Prompt cannot be empty", field = "prompt" });
             }
 
             // TODO: Implement AI content generation with PersonalizationProfile
@@ -132,17 +137,19 @@ public class EmailAgentController : ControllerBase
             var draft = new SendEmailRequest
             {
                 Recipients = Array.Empty<string>(),
-                Subject = "[AI Generated] Subject based on: " + prompt,
-                Body = $"[AI Generated Email Body]\n\nBased on your request: {prompt}\n\nThis email would be personalized using your profile preferences."
+                Subject = "[AI Generated] Subject based on: " + request.Prompt,
+                Body = $"[AI Generated Email Body]\n\nBased on your request: {request.Prompt}\n\n" +
+                       (string.IsNullOrWhiteSpace(request.Context) ? "" : $"Additional context: {request.Context}\n\n") +
+                       "This email would be personalized using your profile preferences."
             };
 
-            _logger.LogInformation("Email draft generated for prompt: {Prompt}", prompt);
+            _logger.LogInformation("Email draft generated for prompt: {Prompt}", request.Prompt);
             return Ok(draft);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error drafting email");
-            return StatusCode(500, "An error occurred while drafting the email");
+            return StatusCode(500, new { error = "An error occurred while drafting the email", details = ex.Message });
         }
     }
 }
