@@ -1,19 +1,33 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Prodigy.Backend.Services;
 using DotNetEnv;
-
-// Load environment variables from .env file
-Env.Load();
+using Prodigy.Backend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Load environment variables from .env file
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env");
+Console.WriteLine($"Looking for .env file at: {envPath}");
+Console.WriteLine($"File exists: {File.Exists(envPath)}");
+
+if (File.Exists(envPath))
+{
+    Env.Load(envPath);
+}
+else
+{
+    Console.WriteLine("Warning: .env file not found, trying default location");
+    Env.Load();
+}
+
+// Debug: Log environment variables to verify they're loaded
+Console.WriteLine($"AZURE_TENANT_ID: {Environment.GetEnvironmentVariable("AZURE_TENANT_ID")}");
+Console.WriteLine($"AZURE_CLIENT_ID: {Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")}");
+Console.WriteLine($"AZURE_CLIENT_SECRET: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")) ? "NOT SET" : "SET")}");
+
 // Add services to the container.
 builder.Services.AddControllers();
-
-// Register Graph Email Service
-builder.Services.AddScoped<IGraphEmailService, GraphEmailService>();
 
 // Add HTTP client for Azure Functions
 builder.Services.AddHttpClient("AzureFunctions", client =>
@@ -22,12 +36,15 @@ builder.Services.AddHttpClient("AzureFunctions", client =>
     client.DefaultRequestHeaders.Add("x-functions-key", builder.Configuration["AZURE_FUNCTIONS_KEY"] ?? "");
 });
 
-// Add CORS for frontend integration
+// Add default HTTP client for general use (needed for authentication proxy)
+builder.Services.AddHttpClient();
+
+// Add CORS for frontend integration - Updated to include port 5174
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("ProdigyFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "https://localhost:3000", "https://localhost:5173", "http://localhost:5173")
+        policy.WithOrigins("http://localhost:3000", "https://localhost:3000", "https://localhost:5173", "http://localhost:5173", "http://localhost:5174", "https://localhost:5174")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -57,6 +74,76 @@ builder.Services.AddAuthentication(x =>
         ValidAudience = builder.Configuration["JWT_AUDIENCE"] ?? "ProdigyUsers",
         ClockSkew = TimeSpan.Zero
     };
+})
+.AddJwtBearer("AzureAD", options =>
+{
+    // Use the common Microsoft endpoint that handles multi-tenant applications
+    options.Authority = "https://login.microsoftonline.com/common/v2.0";
+    options.RequireHttpsMetadata = false; // Allow HTTP for development
+    options.SaveToken = true;
+    
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true, // Enable audience validation for Microsoft Graph
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        
+        // Accept tokens from BOTH v1.0 and v2.0 Azure AD endpoints for our tenant
+        ValidIssuers = new[] {
+            $"https://login.microsoftonline.com/{Environment.GetEnvironmentVariable("AZURE_TENANT_ID")}/v2.0", // v2.0 endpoint
+            $"https://sts.windows.net/{Environment.GetEnvironmentVariable("AZURE_TENANT_ID")}/" // v1.0 endpoint
+        },
+        
+        // Accept Microsoft Graph as the valid audience
+        ValidAudiences = new[] { 
+            "https://graph.microsoft.com",
+            "00000003-0000-0000-c000-000000000000" // Microsoft Graph resource ID
+        },
+        
+        // Clock skew
+        ClockSkew = TimeSpan.FromMinutes(5) // More lenient clock skew for development
+    };
+    
+    // Add event handlers for debugging token validation
+    options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+    {
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine($"[JWT] Token validated successfully for user: {context.Principal?.Identity?.Name}");
+            var claims = context.Principal?.Claims?.Select(c => $"{c.Type}: {c.Value}");
+            Console.WriteLine($"[JWT] Token claims: {string.Join(", ", claims ?? new string[0])}");
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"[JWT] Authentication failed: {context.Exception?.Message}");
+            Console.WriteLine($"[JWT] Exception details: {context.Exception}");
+            return Task.CompletedTask;
+        },
+        OnChallenge = context =>
+        {
+            Console.WriteLine($"[JWT] Authentication challenge: {context.Error}, {context.ErrorDescription}");
+            return Task.CompletedTask;
+        },
+        OnMessageReceived = context =>
+        {
+            Console.WriteLine($"[JWT] Token received from authorization header");
+            return Task.CompletedTask;
+        }
+    };
+});
+
+// Add authorization policies
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireAzureAD", policy =>
+        policy.RequireAuthenticatedUser()
+              .AddAuthenticationSchemes("AzureAD"));
+    
+    options.AddPolicy("RequireJWT", policy =>
+        policy.RequireAuthenticatedUser()
+              .AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme));
 });
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -105,6 +192,10 @@ builder.Services.AddSwaggerGen(c =>
         c.IncludeXmlComments(xmlPath);
     }
 });
+
+// Register Graph Email Services
+builder.Services.AddScoped<IGraphEmailService, GraphEmailService>();
+builder.Services.AddScoped<IGraphUserService, GraphUserService>();
 
 var app = builder.Build();
 

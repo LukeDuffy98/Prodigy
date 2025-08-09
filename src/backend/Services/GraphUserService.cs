@@ -1,64 +1,52 @@
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using Azure.Identity;
+using Azure.Core;
 using Prodigy.Backend.Models;
 
 namespace Prodigy.Backend.Services;
 
 /// <summary>
-/// Implementation of Microsoft Graph email service
+/// Implementation of Microsoft Graph user-authenticated email service
 /// </summary>
-public class GraphEmailService : IGraphEmailService
+public class GraphUserService : IGraphUserService
 {
-    private readonly GraphServiceClient _graphServiceClient;
-    private readonly ILogger<GraphEmailService> _logger;
-    private readonly IConfiguration _configuration;
+    private readonly ILogger<GraphUserService> _logger;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public GraphEmailService(IConfiguration configuration, ILogger<GraphEmailService> logger)
+    public GraphUserService(ILogger<GraphUserService> logger, IHttpClientFactory httpClientFactory)
     {
-        _configuration = configuration;
         _logger = logger;
-
-        // Log Azure AD configuration for debugging - try both IConfiguration and Environment
-        var tenantId = _configuration["AZURE_TENANT_ID"] ?? Environment.GetEnvironmentVariable("AZURE_TENANT_ID");
-        var clientId = _configuration["AZURE_CLIENT_ID"] ?? Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
-        var clientSecret = _configuration["AZURE_CLIENT_SECRET"] ?? Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET");
-
-        _logger.LogInformation("Checking configuration sources:");
-        _logger.LogInformation("IConfiguration AZURE_TENANT_ID: {ConfigTenantId}", _configuration["AZURE_TENANT_ID"]);
-        _logger.LogInformation("Environment AZURE_TENANT_ID: {EnvTenantId}", Environment.GetEnvironmentVariable("AZURE_TENANT_ID"));
-
-        if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
-        {
-            _logger.LogError("Azure AD configuration is missing. Please ensure AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET are configured.");
-            throw new InvalidOperationException("Azure AD configuration is missing. Please ensure AZURE_TENANT_ID, AZURE_CLIENT_ID, and AZURE_CLIENT_SECRET are configured.");
-        }
-
-        _logger.LogInformation("Azure AD configuration loaded successfully: TenantId={TenantId}, ClientId={ClientId}", tenantId, clientId);
-
-        var options = new ClientSecretCredentialOptions
-        {
-            AuthorityHost = AzureAuthorityHosts.AzurePublicCloud,
-        };
-
-        var clientSecretCredential = new ClientSecretCredential(tenantId, clientId, clientSecret, options);
-
-        _graphServiceClient = new GraphServiceClient(clientSecretCredential);
+        _httpClientFactory = httpClientFactory;
     }
 
     /// <summary>
-    /// Sends an email using Microsoft Graph API
+    /// Creates a GraphServiceClient with user access token
     /// </summary>
-    public async Task<string> SendEmailAsync(string[] recipients, string subject, string body)
+    private GraphServiceClient CreateUserGraphClient(string accessToken)
+    {
+        var httpClient = new HttpClient();
+        httpClient.DefaultRequestHeaders.Authorization = 
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        
+        var graphServiceClient = new GraphServiceClient(httpClient);
+        return graphServiceClient;
+    }
+
+    /// <summary>
+    /// Sends an email using Microsoft Graph API with user authentication
+    /// </summary>
+    public async Task<string> SendEmailAsync(string[] recipients, string subject, string body, string accessToken)
     {
         try
         {
+            var graphServiceClient = CreateUserGraphClient(accessToken);
+            
             var message = new Message
             {
                 Subject = subject,
                 Body = new ItemBody
                 {
-                    ContentType = BodyType.Text,
+                    ContentType = BodyType.Html,
                     Content = body
                 },
                 ToRecipients = recipients.Select(email => new Recipient
@@ -70,9 +58,7 @@ public class GraphEmailService : IGraphEmailService
                 }).ToList()
             };
 
-            // Send the email using the authenticated user (application permissions)
-            // Note: This requires Mail.Send application permission in Azure AD
-            await _graphServiceClient.Me.SendMail.PostAsync(new Microsoft.Graph.Me.SendMail.SendMailPostRequestBody
+            await graphServiceClient.Me.SendMail.PostAsync(new Microsoft.Graph.Me.SendMail.SendMailPostRequestBody
             {
                 Message = message,
                 SaveToSentItems = true
@@ -93,11 +79,13 @@ public class GraphEmailService : IGraphEmailService
     /// <summary>
     /// Retrieves emails from the user's inbox
     /// </summary>
-    public async Task<IEnumerable<EmailSummary>> GetInboxEmailsAsync(int top = 50)
+    public async Task<IEnumerable<EmailSummary>> GetInboxEmailsAsync(string accessToken, int top = 50)
     {
         try
         {
-            var messages = await _graphServiceClient.Me.MailFolders["Inbox"].Messages
+            var graphServiceClient = CreateUserGraphClient(accessToken);
+            
+            var messages = await graphServiceClient.Me.MailFolders["Inbox"].Messages
                 .GetAsync(requestConfiguration =>
                 {
                     requestConfiguration.QueryParameters.Top = top;
@@ -132,11 +120,13 @@ public class GraphEmailService : IGraphEmailService
     /// <summary>
     /// Gets detailed information about a specific email
     /// </summary>
-    public async Task<EmailDetail> GetEmailDetailsAsync(string messageId)
+    public async Task<EmailDetail> GetEmailDetailsAsync(string messageId, string accessToken)
     {
         try
         {
-            var message = await _graphServiceClient.Me.Messages[messageId]
+            var graphServiceClient = CreateUserGraphClient(accessToken);
+            
+            var message = await graphServiceClient.Me.Messages[messageId]
                 .GetAsync(requestConfiguration =>
                 {
                     requestConfiguration.QueryParameters.Select = new[] { "id", "subject", "body", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "importance" };
@@ -189,15 +179,17 @@ public class GraphEmailService : IGraphEmailService
     /// <summary>
     /// Creates a reply to an existing email
     /// </summary>
-    public async Task<string> ReplyToEmailAsync(string messageId, string body, bool replyAll = false)
+    public async Task<string> ReplyToEmailAsync(string messageId, string body, string accessToken, bool replyAll = false)
     {
         try
         {
+            var graphServiceClient = CreateUserGraphClient(accessToken);
+            
             // First create a reply draft
             var replyDraft = replyAll 
-                ? await _graphServiceClient.Me.Messages[messageId].CreateReplyAll.PostAsync(
+                ? await graphServiceClient.Me.Messages[messageId].CreateReplyAll.PostAsync(
                     new Microsoft.Graph.Me.Messages.Item.CreateReplyAll.CreateReplyAllPostRequestBody())
-                : await _graphServiceClient.Me.Messages[messageId].CreateReply.PostAsync(
+                : await graphServiceClient.Me.Messages[messageId].CreateReply.PostAsync(
                     new Microsoft.Graph.Me.Messages.Item.CreateReply.CreateReplyPostRequestBody());
 
             if (replyDraft?.Id == null)
@@ -206,7 +198,7 @@ public class GraphEmailService : IGraphEmailService
             }
 
             // Update the draft with our content
-            await _graphServiceClient.Me.Messages[replyDraft.Id]
+            await graphServiceClient.Me.Messages[replyDraft.Id]
                 .PatchAsync(new Message
                 {
                     Body = new ItemBody
@@ -217,7 +209,7 @@ public class GraphEmailService : IGraphEmailService
                 });
 
             // Send the email
-            await _graphServiceClient.Me.Messages[replyDraft.Id].Send.PostAsync();
+            await graphServiceClient.Me.Messages[replyDraft.Id].Send.PostAsync();
 
             _logger.LogInformation("Reply sent successfully for message {MessageId}, replyAll: {ReplyAll}", messageId, replyAll);
             return replyDraft.Id;
@@ -232,11 +224,13 @@ public class GraphEmailService : IGraphEmailService
     /// <summary>
     /// Deletes an email
     /// </summary>
-    public async Task DeleteEmailAsync(string messageId)
+    public async Task DeleteEmailAsync(string messageId, string accessToken)
     {
         try
         {
-            await _graphServiceClient.Me.Messages[messageId].DeleteAsync();
+            var graphServiceClient = CreateUserGraphClient(accessToken);
+            
+            await graphServiceClient.Me.Messages[messageId].DeleteAsync();
             _logger.LogInformation("Email {MessageId} deleted successfully", messageId);
         }
         catch (Exception ex)
