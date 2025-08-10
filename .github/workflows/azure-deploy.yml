@@ -17,8 +17,8 @@ on:
           - prod
 
 env:
-  AZURE_RESOURCE_GROUP: 'rg-prodigy-prod'
-  AZURE_LOCATION: 'East US'
+  AZURE_RESOURCE_GROUP: 'Prodigy'
+  AZURE_LOCATION: 'Australia East'
 
 jobs:
   build-and-test:
