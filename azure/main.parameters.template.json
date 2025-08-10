@@ -9,7 +9,7 @@
       "value": "prod"
     },
     "location": {
-      "value": "East US"
+      "value": "australiaeast"
     },
     "appServicePlanSku": {
       "value": "B2"

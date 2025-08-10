@@ -46,7 +46,7 @@ cp .env.prod.example .env
 
 ```bash
 # 1. Create resource group
-az group create --name "rg-prodigy-prod" --location "East US"
+az group create --name "rg-prodigy-prod" --location "australiaeast"
 
 # 2. Deploy infrastructure
 az deployment group create \

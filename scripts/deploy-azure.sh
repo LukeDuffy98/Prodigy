@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 # Default values
 RESOURCE_GROUP="rg-prodigy-prod"
-LOCATION="East US"
+LOCATION="australiaeast"
 ENVIRONMENT="prod"
 APP_NAME="prodigy"
 
@@ -301,7 +301,7 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --resource-group NAME    Azure resource group name (default: rg-prodigy-prod)"
-            echo "  --location LOCATION      Azure region (default: East US)"
+            echo "  --location LOCATION      Azure region (default: australiaeast)"
             echo "  --environment ENV        Environment name (default: prod)"
             echo "  --app-name NAME          Application name (default: prodigy)"
             echo "  --help                   Show this help message"

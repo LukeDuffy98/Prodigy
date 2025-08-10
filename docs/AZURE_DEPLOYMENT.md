@@ -108,7 +108,7 @@ Environment/
    ```bash
    az group create \
      --name "prodigy" \
-     --location "East US"
+     --location "australiaeast"
    ```
 
 2. **Deploy Bicep template**
