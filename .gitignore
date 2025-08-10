@@ -87,3 +87,4 @@ functions-deploy.zip
 
 # Azure deployment parameters with secrets
 azure/main.parameters.json
+azure/main.json

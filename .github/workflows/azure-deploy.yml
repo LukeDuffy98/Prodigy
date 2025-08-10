@@ -126,11 +126,10 @@ jobs:
             azureTenantId="${{ secrets.AZURE_TENANT_ID }}" \
             azureClientId="${{ secrets.AZURE_CLIENT_ID }}" \
             azureClientSecret="${{ secrets.AZURE_CLIENT_SECRET }}" \
-            jwtSecretKey="${{ secrets.JWT_SECRET_KEY }}" \
+            jwtSecretKey="${{ secrets.JWT_SECRET_KEY || '' }}" \
             githubToken="${{ secrets.GITHUB_TOKEN }}" \
-            linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID }}" \
-            linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
-          --verbose
+            linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID || '' }}" \
+            linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET || '' }}"
 
         echo "Deployment completed. Retrieving outputs..."
         
@@ -232,14 +231,11 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Deploy to Azure Static Web Apps
-      uses: Azure/static-web-apps-deploy@v1
+    - name: Deploy to Azure App Service
+      uses: azure/webapps-deploy@v3
       with:
-        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        action: "upload"
-        app_location: "./frontend-artifacts"
-        skip_app_build: true
+        app-name: 'prodigy-prod-frontend'
+        package: './frontend-artifacts'
 
   deploy-functions:
     needs: [build-and-test, deploy-infrastructure]
