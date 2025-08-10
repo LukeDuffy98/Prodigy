@@ -15,6 +15,11 @@ on:
           - dev
           - staging
           - prod
+      allow_feature_branch_deploy:
+        description: 'Allow deployment from feature branches (staging/dev only)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   AZURE_RESOURCE_GROUP: 'Prodigy1'
@@ -27,6 +32,48 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Check deployment environment
+      run: |
+        environment="${{ inputs.environment || 'prod' }}"
+        allow_feature_deploy="${{ inputs.allow_feature_branch_deploy || 'false' }}"
+        is_main_branch="${{ github.ref == 'refs/heads/main' }}"
+        
+        if [ "$is_main_branch" = "true" ]; then
+          echo "## 🚀 Full Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All jobs will execute including deployment to **${environment}** environment." >> $GITHUB_STEP_SUMMARY
+        elif [ "$allow_feature_deploy" = "true" ] && [ "$environment" != "prod" ]; then
+          echo "## 🔧 Feature Branch Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment to **${environment}** environment is enabled for this feature branch." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** Production deployments are restricted to \`main\` branch only." >> $GITHUB_STEP_SUMMARY
+        elif [ "$allow_feature_deploy" = "true" ] && [ "$environment" = "prod" ]; then
+          echo "## ⛔ Production Deployment Blocked" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Production deployments are not allowed from feature branches for security.**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Requested environment: **${environment}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**To deploy to production:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Merge this branch to \`main\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. Trigger the workflow from \`main\` branch" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ⚠️ Deployment Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment jobs will be skipped because this workflow is running from branch: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Why are deployment jobs skipped?**" >> $GITHUB_STEP_SUMMARY
+          echo "- Production deployments only run from the \`main\` branch for security" >> $GITHUB_STEP_SUMMARY
+          echo "- This prevents accidental deployments from feature branches" >> $GITHUB_STEP_SUMMARY
+          echo "- Only build and test jobs will execute for feature branches" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Options:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. **For production:** Merge to \`main\` and trigger workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. **For testing:** Re-run with 'Allow feature branch deploy' + staging/dev environment" >> $GITHUB_STEP_SUMMARY
+        fi
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -84,7 +131,7 @@ jobs:
   deploy-infrastructure:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (inputs.allow_feature_branch_deploy == true && inputs.environment != 'prod')
     
     outputs:
       backend-url: ${{ steps.deploy-bicep.outputs.backendUrl }}
@@ -115,13 +162,14 @@ jobs:
         echo "Starting deployment: $deployment_name"
         
         # Deploy the Bicep template without capturing outputs to avoid stream consumption issues
+        environment="${{ inputs.environment || 'prod' }}"
         az deployment group create \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --name "$deployment_name" \
           --template-file azure/main.bicep \
           --parameters \
             appName=prodigy \
-            environment=prod \
+            environment=$environment \
             location="${{ env.AZURE_LOCATION }}" \
             azureTenantId="${{ secrets.AZURE_TENANT_ID }}" \
             azureClientId="${{ secrets.AZURE_CLIENT_ID }}" \
@@ -178,7 +226,7 @@ jobs:
   deploy-backend:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (inputs.allow_feature_branch_deploy == true && inputs.environment != 'prod')
     
     steps:
     - name: Checkout code
@@ -208,13 +256,13 @@ jobs:
     - name: Deploy to Azure App Service
       uses: azure/webapps-deploy@v3
       with:
-        app-name: 'prodigy-prod-api'
+        app-name: 'prodigy-${{ inputs.environment || 'prod' }}-api'
         package: './publish-backend'
 
   deploy-frontend:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (inputs.allow_feature_branch_deploy == true && inputs.environment != 'prod')
     
     steps:
     - name: Checkout code
@@ -234,13 +282,13 @@ jobs:
     - name: Deploy to Azure App Service
       uses: azure/webapps-deploy@v3
       with:
-        app-name: 'prodigy-prod-frontend'
+        app-name: 'prodigy-${{ inputs.environment || 'prod' }}-frontend'
         package: './frontend-artifacts'
 
   deploy-functions:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (inputs.allow_feature_branch_deploy == true && inputs.environment != 'prod')
     
     steps:
     - name: Checkout code
@@ -270,13 +318,13 @@ jobs:
     - name: Deploy to Azure Functions
       uses: Azure/functions-action@v1
       with:
-        app-name: 'prodigy-prod-functions'
+        app-name: 'prodigy-${{ inputs.environment || 'prod' }}-functions'
         package: './publish-functions'
 
   verify-deployment:
     needs: [deploy-backend, deploy-frontend, deploy-functions]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (inputs.allow_feature_branch_deploy == true && inputs.environment != 'prod')
     
     steps:
     - name: Verify backend health
