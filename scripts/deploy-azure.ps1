@@ -3,7 +3,7 @@
 
 param(
     [string]$ResourceGroup = "rg-prodigy-prod",
-    [string]$Location = "East US",
+    [string]$Location = "australiaeast",
     [string]$Environment = "prod",
     [string]$AppName = "prodigy",
     [switch]$Help
@@ -17,7 +17,7 @@ if ($Help) {
     Write-Host ""
     Write-Host "Options:" -ForegroundColor Yellow
     Write-Host "  -ResourceGroup NAME    Azure resource group name (default: rg-prodigy-prod)"
-    Write-Host "  -Location LOCATION     Azure region (default: East US)"
+    Write-Host "  -Location LOCATION     Azure region (default: australiaeast)"
     Write-Host "  -Environment ENV       Environment name (default: prod)"
     Write-Host "  -AppName NAME          Application name (default: prodigy)"
     Write-Host "  -Help                  Show this help message"
