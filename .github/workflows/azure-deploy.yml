@@ -109,8 +109,15 @@ jobs:
     - name: Deploy Bicep template
       id: deploy-bicep
       run: |
-        deployment_output=$(az deployment group create \
+        # Generate unique deployment name to avoid conflicts
+        deployment_name="prodigy-deployment-$(date +%Y%m%d%H%M%S)"
+        
+        echo "Starting deployment: $deployment_name"
+        
+        # Deploy the Bicep template without capturing outputs to avoid stream consumption issues
+        az deployment group create \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name "$deployment_name" \
           --template-file azure/main.bicep \
           --parameters \
             appName=prodigy \
@@ -123,17 +130,51 @@ jobs:
             githubToken="${{ secrets.GITHUB_TOKEN }}" \
             linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID }}" \
             linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
+          --verbose
+
+        echo "Deployment completed. Retrieving outputs..."
+        
+        # Separately query for deployment outputs to avoid response stream conflicts
+        deployment_output=$(az deployment group show \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name "$deployment_name" \
           --query properties.outputs \
           --output json)
 
-        if [ -z "$deployment_output" ]; then
-          echo "Deployment output is empty. Deployment likely failed."
+        if [ -z "$deployment_output" ] || [ "$deployment_output" = "null" ]; then
+          echo "Error: Could not retrieve deployment outputs"
+          echo "Deployment status:"
+          az deployment group show \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name "$deployment_name" \
+            --query properties.provisioningState \
+            --output tsv
           exit 1
         fi
 
-        echo "backendUrl=$(echo $deployment_output | jq -r '.backendUrl.value')" >> $GITHUB_OUTPUT
-        echo "frontendUrl=$(echo $deployment_output | jq -r '.frontendUrl.value')" >> $GITHUB_OUTPUT
-        echo "functionsUrl=$(echo $deployment_output | jq -r '.functionsUrl.value')" >> $GITHUB_OUTPUT
+        echo "Deployment outputs retrieved successfully"
+        
+        # Extract individual output values and set them as GitHub outputs
+        backend_url=$(echo $deployment_output | jq -r '.backendUrl.value // empty')
+        frontend_url=$(echo $deployment_output | jq -r '.frontendUrl.value // empty')
+        functions_url=$(echo $deployment_output | jq -r '.functionsUrl.value // empty')
+
+        if [ -z "$backend_url" ] || [ -z "$frontend_url" ] || [ -z "$functions_url" ]; then
+          echo "Error: One or more required outputs are missing"
+          echo "Backend URL: $backend_url"
+          echo "Frontend URL: $frontend_url"
+          echo "Functions URL: $functions_url"
+          exit 1
+        fi
+
+        echo "backendUrl=$backend_url" >> $GITHUB_OUTPUT
+        echo "frontendUrl=$frontend_url" >> $GITHUB_OUTPUT
+        echo "functionsUrl=$functions_url" >> $GITHUB_OUTPUT
+        
+        echo "Successfully set deployment outputs:"
+        echo "  Backend URL: $backend_url"
+        echo "  Frontend URL: $frontend_url"
+        echo "  Functions URL: $functions_url"
 
   deploy-backend:
     needs: [build-and-test, deploy-infrastructure]
