@@ -112,15 +112,16 @@ jobs:
         # Generate unique deployment name to avoid conflicts
         deployment_name="prodigy-deployment-$(date +%Y%m%d%H%M%S)"
         
-        echo "Starting async deployment: $deployment_name"
+        echo "Starting deployment: $deployment_name"
         
-        # Deploy the Bicep template asynchronously to avoid stream consumption issues
-        az deployment group create \
+        # Deploy the Bicep template with verbose output to avoid stream consumption issues
+        echo "Creating deployment..."
+        deployment_result=$(az deployment group create \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --name "$deployment_name" \
           --template-file azure/main.bicep \
-          --no-wait \
-          --output none \
+          --mode Incremental \
+          --output json \
           --parameters \
             appName=prodigy \
             environment=prod \
@@ -131,55 +132,32 @@ jobs:
             jwtSecretKey="${{ secrets.JWT_SECRET_KEY || '' }}" \
             githubToken="${{ secrets.GITHUB_TOKEN }}" \
             linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID || '' }}" \
-            linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET || '' }}"
+            linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET || '' }}" 2>&1)
 
-        echo "Deployment started successfully. Waiting for completion..."
-        
-        # Poll for deployment completion with timeout
-        max_wait_time=1800  # 30 minutes
-        wait_interval=30    # 30 seconds
-        elapsed_time=0
-        
-        while [ $elapsed_time -lt $max_wait_time ]; do
-          deployment_status=$(az deployment group show \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --name "$deployment_name" \
-            --query properties.provisioningState \
-            --output tsv 2>/dev/null || echo "NotFound")
-          
-          echo "Deployment status: $deployment_status (${elapsed_time}s elapsed)"
-          
-          if [ "$deployment_status" = "Succeeded" ]; then
-            echo "Deployment completed successfully!"
-            break
-          elif [ "$deployment_status" = "Failed" ] || [ "$deployment_status" = "Canceled" ]; then
-            echo "Deployment failed with status: $deployment_status"
-            # Show deployment error details
-            az deployment group show \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --name "$deployment_name" \
-              --query properties.error \
-              --output json
-            exit 1
-          fi
-          
-          sleep $wait_interval
-          elapsed_time=$((elapsed_time + wait_interval))
-        done
-        
-        if [ $elapsed_time -ge $max_wait_time ]; then
-          echo "Deployment timed out after ${max_wait_time} seconds"
+        # Check if deployment was successful
+        if [ $? -ne 0 ]; then
+          echo "Deployment failed!"
+          echo "Error output:"
+          echo "$deployment_result"
           exit 1
         fi
+
+        echo "Deployment completed successfully!"
         
         echo "Retrieving deployment outputs..."
         
-        # Retrieve deployment outputs after successful completion
-        deployment_output=$(az deployment group show \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name "$deployment_name" \
-          --query properties.outputs \
-          --output json)
+        # Extract deployment outputs from the result
+        deployment_output=$(echo "$deployment_result" | jq -r '.properties.outputs // empty')
+
+        if [ -z "$deployment_output" ] || [ "$deployment_output" = "null" ]; then
+          echo "Warning: Could not extract outputs from deployment result, trying alternative method..."
+          # Fallback: query deployment directly
+          deployment_output=$(az deployment group show \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name "$deployment_name" \
+            --query properties.outputs \
+            --output json)
+        fi
 
         if [ -z "$deployment_output" ] || [ "$deployment_output" = "null" ]; then
           echo "Error: Could not retrieve deployment outputs"
@@ -189,15 +167,16 @@ jobs:
         echo "Deployment outputs retrieved successfully"
         
         # Extract individual output values and set them as GitHub outputs
-        backend_url=$(echo $deployment_output | jq -r '.backendUrl.value // empty')
-        frontend_url=$(echo $deployment_output | jq -r '.frontendUrl.value // empty')
-        functions_url=$(echo $deployment_output | jq -r '.functionsUrl.value // empty')
+        backend_url=$(echo "$deployment_output" | jq -r '.backendUrl.value // empty')
+        frontend_url=$(echo "$deployment_output" | jq -r '.frontendUrl.value // empty')
+        functions_url=$(echo "$deployment_output" | jq -r '.functionsUrl.value // empty')
 
         if [ -z "$backend_url" ] || [ -z "$frontend_url" ] || [ -z "$functions_url" ]; then
           echo "Error: One or more required outputs are missing"
           echo "Backend URL: $backend_url"
           echo "Frontend URL: $frontend_url"
           echo "Functions URL: $functions_url"
+          echo "Raw output: $deployment_output"
           exit 1
         fi
 
