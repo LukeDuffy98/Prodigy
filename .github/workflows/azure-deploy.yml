@@ -113,8 +113,15 @@ jobs:
         deployment_name="prodigy-deployment-$(date +%Y%m%d%H%M%S)"
         
         echo "Starting async deployment: $deployment_name"
+        echo "Deployment parameters:"
+        echo "  App Name: prodigy"
+        echo "  Environment: prod" 
+        echo "  Location: ${{ env.AZURE_LOCATION }}"
+        echo "  App Service Plan SKU: B1"
+        echo "  Resource Group: ${{ env.AZURE_RESOURCE_GROUP }}"
         
         # Deploy the Bicep template asynchronously to avoid stream consumption issues
+        echo "Executing deployment command..."
         az deployment group create \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --name "$deployment_name" \
@@ -125,6 +132,7 @@ jobs:
             appName=prodigy \
             environment=prod \
             location="${{ env.AZURE_LOCATION }}" \
+            appServicePlanSku="B1" \
             azureTenantId="${{ secrets.AZURE_TENANT_ID }}" \
             azureClientId="${{ secrets.AZURE_CLIENT_ID }}" \
             azureClientSecret="${{ secrets.AZURE_CLIENT_SECRET }}" \
@@ -132,6 +140,17 @@ jobs:
             githubToken="${{ secrets.GITHUB_TOKEN }}" \
             linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID || '' }}" \
             linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET || '' }}"
+        
+        deployment_create_exit_code=$?
+        if [ $deployment_create_exit_code -ne 0 ]; then
+          echo "❌ Failed to start deployment. Exit code: $deployment_create_exit_code"
+          echo "Checking for recent deployment errors..."
+          az deployment group list \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --query "[?starts_with(name, 'prodigy-deployment')].{name:name, status:properties.provisioningState, timestamp:properties.timestamp}" \
+            --output table
+          exit 1
+        fi
 
         echo "Deployment started successfully. Waiting for completion..."
         
@@ -153,13 +172,21 @@ jobs:
             echo "Deployment completed successfully!"
             break
           elif [ "$deployment_status" = "Failed" ] || [ "$deployment_status" = "Canceled" ]; then
-            echo "Deployment failed with status: $deployment_status"
+            echo "❌ Deployment failed with status: $deployment_status"
+            echo "Fetching detailed error information..."
             # Show deployment error details
             az deployment group show \
               --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
               --name "$deployment_name" \
               --query properties.error \
               --output json
+            # Show resource-level errors if available
+            echo "Checking for resource-level deployment errors..."
+            az deployment operation group list \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --name "$deployment_name" \
+              --query "[?properties.provisioningState=='Failed'].{resource:properties.targetResource.resourceName, error:properties.statusMessage}" \
+              --output table
             exit 1
           fi
           
