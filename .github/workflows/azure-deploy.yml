@@ -125,7 +125,12 @@ jobs:
             linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET }}" \
           --query properties.outputs \
           --output json)
-        
+
+        if [ -z "$deployment_output" ]; then
+          echo "Deployment output is empty. Deployment likely failed."
+          exit 1
+        fi
+
         echo "backendUrl=$(echo $deployment_output | jq -r '.backendUrl.value')" >> $GITHUB_OUTPUT
         echo "frontendUrl=$(echo $deployment_output | jq -r '.frontendUrl.value')" >> $GITHUB_OUTPUT
         echo "functionsUrl=$(echo $deployment_output | jq -r '.functionsUrl.value')" >> $GITHUB_OUTPUT
