@@ -24,7 +24,7 @@ param azureClientSecret string
 
 @description('JWT Secret Key')
 @secure()
-param jwtSecretKey string
+param jwtSecretKey string = ''
 
 @description('GitHub Token for API access')
 @secure()
@@ -32,11 +32,11 @@ param githubToken string
 
 @description('LinkedIn Client ID')
 @secure()
-param linkedinClientId string
+param linkedinClientId string = ''
 
 @description('LinkedIn Client Secret')
 @secure()
-param linkedinClientSecret string
+param linkedinClientSecret string = ''
 
 // Variables
 var resourcePrefix = '${appName}-${environment}'
@@ -132,7 +132,7 @@ resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
+      appSettings: concat([
         {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: 'Production'
@@ -154,20 +154,8 @@ resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
           value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=azure-client-secret)'
         }
         {
-          name: 'JWT_SECRET_KEY'
-          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=jwt-secret-key)'
-        }
-        {
           name: 'GITHUB_TOKEN'
           value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=github-token)'
-        }
-        {
-          name: 'LINKEDIN_CLIENT_ID'
-          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=linkedin-client-id)'
-        }
-        {
-          name: 'LINKEDIN_CLIENT_SECRET'
-          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=linkedin-client-secret)'
         }
         {
           name: 'JWT_ISSUER'
@@ -193,27 +181,49 @@ resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
           name: 'GITHUB_REPO_NAME'
           value: 'Prodigy'
         }
-      ]
+      ], !empty(jwtSecretKey) ? [
+        {
+          name: 'JWT_SECRET_KEY'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=jwt-secret-key)'
+        }
+      ] : [], !empty(linkedinClientId) ? [
+        {
+          name: 'LINKEDIN_CLIENT_ID'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=linkedin-client-id)'
+        }
+      ] : [], !empty(linkedinClientSecret) ? [
+        {
+          name: 'LINKEDIN_CLIENT_SECRET'
+          value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=linkedin-client-secret)'
+        }
+      ] : [])
     }
   }
 }
 
-// Static Web App for Frontend
-resource frontendApp 'Microsoft.Web/staticSites@2023-12-01' = {
+// Frontend App Service (serving built React app)
+resource frontendApp 'Microsoft.Web/sites@2023-12-01' = {
   name: frontendAppName
   location: location
-  sku: {
-    name: 'Standard'
-    tier: 'Standard'
-  }
   properties: {
-    buildProperties: {
-      appLocation: '/src/frontend'
-      outputLocation: 'dist'
-      appBuildCommand: 'npm run build'
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      linuxFxVersion: 'NODE|20-lts'
+      alwaysOn: true
+      ftpsState: 'Disabled'
+      minTlsVersion: '1.2'
+      appSettings: [
+        {
+          name: 'WEBSITE_NODE_DEFAULT_VERSION'
+          value: '20.x'
+        }
+        {
+          name: 'REACT_APP_API_BASE_URL'
+          value: 'https://${backendAppName}.azurewebsites.net/api'
+        }
+      ]
     }
-    repositoryUrl: 'https://github.com/LukeDuffy98/Prodigy'
-    branch: 'main'
   }
 }
 
@@ -300,7 +310,7 @@ resource azureClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' 
   }
 }
 
-resource jwtSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource jwtSecretKeySecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(jwtSecretKey)) {
   parent: keyVault
   name: 'jwt-secret-key'
   properties: {
@@ -316,7 +326,7 @@ resource githubTokenSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
   }
 }
 
-resource linkedinClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource linkedinClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(linkedinClientId)) {
   parent: keyVault
   name: 'linkedin-client-id'
   properties: {
@@ -324,7 +334,7 @@ resource linkedinClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' =
   }
 }
 
-resource linkedinClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource linkedinClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(linkedinClientSecret)) {
   parent: keyVault
   name: 'linkedin-client-secret'
   properties: {
@@ -355,7 +365,7 @@ resource functionsKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-0
 
 // Outputs
 output backendUrl string = 'https://${backendApp.properties.defaultHostName}'
-output frontendUrl string = 'https://${frontendApp.properties.defaultHostname}'
+output frontendUrl string = 'https://${frontendApp.properties.defaultHostName}'
 output functionsUrl string = 'https://${functionsApp.properties.defaultHostName}'
 output keyVaultName string = keyVault.name
 output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
