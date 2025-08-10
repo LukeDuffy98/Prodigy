@@ -187,6 +187,7 @@ function Deploy-Infrastructure {
             "appName=$AppName" `
             "environment=$Environment" `
             "location=$Location" `
+            "appServicePlanSku=B1" `
             "azureTenantId=$env:AZURE_TENANT_ID" `
             "azureClientId=$env:AZURE_CLIENT_ID" `
             "azureClientSecret=$env:AZURE_CLIENT_SECRET" `

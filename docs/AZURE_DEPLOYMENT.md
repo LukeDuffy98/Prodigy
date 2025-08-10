@@ -27,14 +27,41 @@ cp .env.prod.example .env
 
 # Run the deployment script
 ./scripts/deploy-azure.sh
+
+# Alternative: Use REST API approach for enhanced error handling
+./scripts/deploy-azure-rest.sh
 ```
+
+## 🔧 Deployment Options
+
+### Option 1: Standard Azure CLI Deployment
+```bash
+./scripts/deploy-azure.sh
+```
+- Uses Azure CLI for deployment
+- Simpler approach
+- Good for most scenarios
+
+### Option 2: REST API Deployment (Recommended for troubleshooting)
+```bash
+./scripts/deploy-azure-rest.sh
+```
+- Uses direct Azure REST API calls
+- Enhanced error handling and logging
+- Better for debugging deployment issues
+- Proper JSON parameter handling with --argjson
+
+### Option 3: GitHub Actions CI/CD
+- Automatically triggered on push to main branch
+- Includes all deployment fixes for Azure Functions support
+- Enhanced logging and error reporting
 
 ## 🏗️ Infrastructure Components
 
 The Azure deployment creates the following resources:
 
 ### Core Services
-- **App Service Plan** (B2): Hosts web applications
+- **App Service Plan** (B1): Hosts web applications (minimum for Azure Functions)
 - **App Service** (Backend): ASP.NET Core Web API
 - **Static Web App** (Frontend): React application
 - **Azure Functions App**: Business logic functions

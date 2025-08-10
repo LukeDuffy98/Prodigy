@@ -143,6 +143,7 @@ deploy_infrastructure() {
             appName="$APP_NAME" \
             environment="$ENVIRONMENT" \
             location="$LOCATION" \
+            appServicePlanSku="B1" \
             azureTenantId="$AZURE_TENANT_ID" \
             azureClientId="$AZURE_CLIENT_ID" \
             azureClientSecret="$AZURE_CLIENT_SECRET" \

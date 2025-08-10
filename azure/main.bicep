@@ -8,7 +8,7 @@ param environment string = 'prod'
 param location string = resourceGroup().location
 
 @description('App Service Plan SKU')
-param appServicePlanSku string = 'B2'
+param appServicePlanSku string = 'B1'
 
 @description('Azure AD Tenant ID')
 @secure()
@@ -104,12 +104,16 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
+// Helper function to map SKU name to tier
+var appServicePlanTier = appServicePlanSku == 'F1' ? 'Free' : (startsWith(appServicePlanSku, 'B') ? 'Basic' : (startsWith(appServicePlanSku, 'S') ? 'Standard' : (startsWith(appServicePlanSku, 'P') ? 'Premium' : 'Basic')))
+
 // App Service Plan
 resource appServicePlan 'Microsoft.Web/serverfarms@2023-12-01' = {
   name: appServicePlanName
   location: location
   sku: {
     name: appServicePlanSku
+    tier: appServicePlanTier
   }
   kind: 'linux'
   properties: {
