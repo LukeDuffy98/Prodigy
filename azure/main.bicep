@@ -40,7 +40,7 @@ param linkedinClientSecret string = ''
 
 // Variables
 var resourcePrefix = '${appName}-${environment}'
-var keyVaultName = 'prodigykv${uniqueString(resourceGroup().id)}'
+var keyVaultName = 'prodigykv${uniqueString(resourceGroup().id, utcNow())}'
 var appServicePlanName = '${resourcePrefix}-asp'
 var backendAppName = '${resourcePrefix}-api'
 var frontendAppName = '${resourcePrefix}-frontend'
