@@ -84,7 +84,7 @@ jobs:
   deploy-infrastructure:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     outputs:
       backend-url: ${{ steps.deploy-rest-api.outputs.backendUrl }}
@@ -131,7 +131,7 @@ jobs:
   deploy-backend:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
@@ -167,7 +167,7 @@ jobs:
   deploy-frontend:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
@@ -193,7 +193,7 @@ jobs:
   deploy-functions:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
@@ -229,7 +229,7 @@ jobs:
   verify-deployment:
     needs: [deploy-backend, deploy-frontend, deploy-functions]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Verify backend health
