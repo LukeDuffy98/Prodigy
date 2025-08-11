@@ -38,9 +38,12 @@ param linkedinClientId string = ''
 @secure()
 param linkedinClientSecret string = ''
 
+@description('Deployment timestamp for unique resource naming')
+param deploymentTimestamp string = utcNow()
+
 // Variables
 var resourcePrefix = '${appName}-${environment}'
-var keyVaultName = 'prodigykv${uniqueString(resourceGroup().id, utcNow())}'
+var keyVaultName = 'prodigykv${uniqueString(resourceGroup().id, deploymentTimestamp)}'
 var appServicePlanName = '${resourcePrefix}-asp'
 var backendAppName = '${resourcePrefix}-api'
 var frontendAppName = '${resourcePrefix}-frontend'
