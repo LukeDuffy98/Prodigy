@@ -38,14 +38,17 @@ param linkedinClientId string = ''
 @secure()
 param linkedinClientSecret string = ''
 
+@description('Deployment timestamp for unique resource naming')
+param deploymentTimestamp string = utcNow()
+
 // Variables
 var resourcePrefix = '${appName}-${environment}'
-var keyVaultName = '${resourcePrefix}-kv-${uniqueString(resourceGroup().id)}'
+var keyVaultName = 'prodigykv${uniqueString(resourceGroup().id, deploymentTimestamp)}'
 var appServicePlanName = '${resourcePrefix}-asp'
 var backendAppName = '${resourcePrefix}-api'
 var frontendAppName = '${resourcePrefix}-frontend'
 var functionsAppName = '${resourcePrefix}-functions'
-var storageAccountName = '${replace(resourcePrefix, '-', '')}st${uniqueString(resourceGroup().id)}'
+var storageAccountName = 'prodigyst${uniqueString(resourceGroup().id)}'
 var applicationInsightsName = '${resourcePrefix}-ai'
 var logAnalyticsWorkspaceName = '${resourcePrefix}-law'
 
@@ -96,11 +99,32 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       name: 'standard'
     }
     tenantId: subscription().tenantId
-    accessPolicies: []
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: backendApp.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+      {
+        tenantId: subscription().tenantId
+        objectId: functionsApp.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
     enabledForDeployment: false
     enabledForTemplateDeployment: true
     enabledForDiskEncryption: false
-    enableRbacAuthorization: true
+    enableRbacAuthorization: false
   }
 }
 
@@ -132,14 +156,23 @@ resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: appServicePlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|8.0'
+      linuxFxVersion: 'DOTNET|8.0'
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
+      appCommandLine: ''
       appSettings: concat([
         {
           name: 'ASPNETCORE_ENVIRONMENT'
           value: 'Production'
+        }
+        {
+          name: 'ASPNETCORE_URLS'
+          value: 'http://+:8080'
+        }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
         }
         {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
@@ -217,6 +250,7 @@ resource frontendApp 'Microsoft.Web/sites@2023-12-01' = {
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
+      appCommandLine: 'node server.js'
       appSettings: [
         {
           name: 'WEBSITE_NODE_DEFAULT_VERSION'
@@ -225,6 +259,14 @@ resource frontendApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'REACT_APP_API_BASE_URL'
           value: 'https://${backendAppName}.azurewebsites.net/api'
+        }
+        {
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'false'
+        }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
         }
       ]
     }
@@ -343,27 +385,6 @@ resource linkedinClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-0
   name: 'linkedin-client-secret'
   properties: {
     value: linkedinClientSecret
-  }
-}
-
-// Role assignments for Key Vault access
-resource backendKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, backendApp.id, 'Key Vault Secrets User')
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
-    principalId: backendApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource functionsKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, functionsApp.id, 'Key Vault Secrets User')
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
-    principalId: functionsApp.identity.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 

@@ -11,20 +11,29 @@ var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env");
 Console.WriteLine($"Looking for .env file at: {envPath}");
 Console.WriteLine($"File exists: {File.Exists(envPath)}");
 
-if (File.Exists(envPath))
+// In production, environment variables are set via Azure App Service configuration
+var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+Console.WriteLine($"Starting Prodigy API in {environment} environment");
+
+if (environment == "Development" && File.Exists(envPath))
 {
     Env.Load(envPath);
 }
 else
 {
-    Console.WriteLine("Warning: .env file not found, trying default location");
-    Env.Load();
+    Console.WriteLine($"Using environment variables from hosting environment ({environment})");
 }
 
-// Debug: Log environment variables to verify they're loaded
+// Debug: Log environment variables to verify they're loaded (but don't log secrets in production)
 Console.WriteLine($"AZURE_TENANT_ID: {Environment.GetEnvironmentVariable("AZURE_TENANT_ID")}");
 Console.WriteLine($"AZURE_CLIENT_ID: {Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")}");
-Console.WriteLine($"AZURE_CLIENT_SECRET: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")) ? "NOT SET" : "SET")}");
+if (environment == "Development")
+{
+    Console.WriteLine($"AZURE_CLIENT_SECRET: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")) ? "NOT SET" : "SET")}");
+}
+
+Console.WriteLine("Application URLs will be configured by the hosting environment");
+Console.WriteLine("Starting application...");
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -199,6 +208,10 @@ builder.Services.AddScoped<IGraphUserService, GraphUserService>();
 
 var app = builder.Build();
 
+// Add startup logging
+Console.WriteLine($"Starting Prodigy API in {app.Environment.EnvironmentName} environment");
+Console.WriteLine($"Application URLs will be configured by the hosting environment");
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -211,8 +224,13 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Redirect root to API documentation in production
-    app.MapGet("/", () => Results.Redirect("/swagger"));
+    // Enable Swagger in production for Azure deployment debugging
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prodigy API v1");
+        c.RoutePrefix = "swagger"; // Serve Swagger UI at /swagger in production
+    });
 }
 
 app.UseHttpsRedirection();
@@ -224,14 +242,19 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Health check endpoint
-app.MapGet("/health", () => new { Status = "Healthy", Timestamp = DateTime.UtcNow, Version = "1.0.0" });
+// Health check endpoint - high priority, defined early
+app.MapGet("/health", () => 
+{
+    Console.WriteLine("Health check endpoint accessed");
+    return new { Status = "Healthy", Timestamp = DateTime.UtcNow, Version = "1.0.0", Environment = app.Environment.EnvironmentName };
+});
 
-// Welcome endpoint
+// Welcome endpoint for root
 app.MapGet("/", () => new { 
     Message = "Welcome to Prodigy API", 
     Version = "1.0.0",
-    Swagger = "/swagger",
+    Environment = app.Environment.EnvironmentName,
+    Swagger = app.Environment.IsDevelopment() ? "/" : "/swagger",
     Endpoints = new { 
         Health = "/health",
         PersonalizationProfile = "/api/user/personalization-profile",
@@ -244,4 +267,5 @@ app.MapGet("/", () => new {
     }
 });
 
+Console.WriteLine("Starting application...");
 app.Run();

@@ -17,8 +17,8 @@ on:
           - prod
 
 env:
-  AZURE_RESOURCE_GROUP: 'Prodigy1'
-  AZURE_LOCATION: 'eastus'
+  AZURE_RESOURCE_GROUP: 'Prodigy'
+  AZURE_LOCATION: 'australiaeast'
 
 jobs:
   build-and-test:
@@ -44,6 +44,22 @@ jobs:
     - name: Build .NET solution
       run: dotnet build --no-restore
 
+    - name: Publish backend
+      run: |
+        cd src/backend
+        dotnet publish -c Release -o bin/Release/net8.0/publish
+        echo "Backend publish completed. Files created:"
+        ls -la bin/Release/net8.0/publish/ | head -10
+
+    - name: Publish functions
+      run: |
+        cd azure-functions
+        # Ensure local.settings.json is included in publish for Azure Functions v4
+        cp local.settings.json bin/Release/net8.0/publish/ 2>/dev/null || echo "local.settings.json not found, creating minimal version"
+        dotnet publish -c Release -o bin/Release/net8.0/publish
+        echo "Functions publish completed. Files created:"
+        ls -la bin/Release/net8.0/publish/ | head -10
+
     - name: Install frontend dependencies
       run: |
         cd src/frontend
@@ -59,6 +75,35 @@ jobs:
         cd src/frontend
         npm run lint
 
+    - name: Prepare frontend deployment package
+      run: |
+        echo "📦 Creating frontend deployment package..."
+        mkdir -p frontend-deployment-package
+        
+        # Copy server files to root of deployment package
+        cp src/frontend/server.js frontend-deployment-package/
+        cp src/frontend/package.json frontend-deployment-package/
+        cp src/frontend/package-lock.json frontend-deployment-package/
+        
+        # Copy built frontend files to dist subdirectory
+        cp -r src/frontend/dist frontend-deployment-package/
+        
+        # Create startup script for better Azure compatibility
+        echo '#!/bin/bash' > frontend-deployment-package/startup.sh
+        echo 'echo "Starting Prodigy Frontend Server..."' >> frontend-deployment-package/startup.sh
+        echo 'node server.js' >> frontend-deployment-package/startup.sh
+        chmod +x frontend-deployment-package/startup.sh
+        
+        # Verify deployment package has all required files
+        echo "📋 Frontend deployment package structure:"
+        find frontend-deployment-package -type f | head -20
+        
+        echo "🔧 Verifying package.json contains correct start script..."
+        grep -A2 '"scripts"' frontend-deployment-package/package.json || echo "⚠️ scripts section not found"
+        
+        echo "🔧 Verifying server.js uses ES module syntax..."
+        grep -q "import express" frontend-deployment-package/server.js && echo "✅ ES module syntax confirmed" || echo "❌ CommonJS syntax detected"
+
     - name: Upload backend artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -67,11 +112,16 @@ jobs:
           src/backend/bin/Release/net8.0/publish/
           !src/backend/bin/Release/net8.0/publish/**/*.pdb
 
+    - name: Verify backend artifacts path
+      run: |
+        echo "Verifying backend artifacts path exists and has content:"
+        ls -la src/backend/bin/Release/net8.0/publish/ || echo "Backend publish directory not found!"
+
     - name: Upload frontend artifacts
       uses: actions/upload-artifact@v4
       with:
         name: frontend-artifacts
-        path: src/frontend/dist/
+        path: frontend-deployment-package/
 
     - name: Upload functions artifacts
       uses: actions/upload-artifact@v4
@@ -81,166 +131,62 @@ jobs:
           azure-functions/bin/Release/net8.0/publish/
           !azure-functions/bin/Release/net8.0/publish/**/*.pdb
 
+    - name: Verify functions artifacts path
+      run: |
+        echo "Verifying functions artifacts path exists and has content:"
+        ls -la azure-functions/bin/Release/net8.0/publish/ || echo "Functions publish directory not found!"
+
   deploy-infrastructure:
     needs: build-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     outputs:
-      backend-url: ${{ steps.deploy-bicep.outputs.backendUrl }}
-      frontend-url: ${{ steps.deploy-bicep.outputs.frontendUrl }}
-      functions-url: ${{ steps.deploy-bicep.outputs.functionsUrl }}
+      backend-url: ${{ steps.deploy-rest-api.outputs.backendUrl }}
+      frontend-url: ${{ steps.deploy-rest-api.outputs.frontendUrl }}
+      functions-url: ${{ steps.deploy-rest-api.outputs.functionsUrl }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Azure Login
-      uses: azure/login@v2
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Create Resource Group
+    - name: Install dependencies
       run: |
-        az group create \
-          --name ${{ env.AZURE_RESOURCE_GROUP }} \
-          --location "${{ env.AZURE_LOCATION }}"
+        sudo apt-get update
+        sudo apt-get install -y jq curl
 
-    - name: Deploy Bicep template
-      id: deploy-bicep
+    - name: Deploy Infrastructure via REST API
+      id: deploy-rest-api
+      env:
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_RESOURCE_GROUP: ${{ env.AZURE_RESOURCE_GROUP }}
+        AZURE_LOCATION: ${{ env.AZURE_LOCATION }}
+        APP_NAME: 'prodigy'
+        ENVIRONMENT: 'prod'
+        APP_SERVICE_PLAN_SKU: 'B1'
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        LINKEDIN_CLIENT_ID: ${{ secrets.LINKEDIN_CLIENT_ID }}
+        LINKEDIN_CLIENT_SECRET: ${{ secrets.LINKEDIN_CLIENT_SECRET }}
       run: |
-        # Generate unique deployment name to avoid conflicts
-        deployment_name="prodigy-deployment-$(date +%Y%m%d%H%M%S)"
-        
-        echo "Starting async deployment: $deployment_name"
-        echo "Deployment parameters:"
+        echo "🚀 Starting REST API-based infrastructure deployment..."
+        echo "📋 Deployment parameters:"
         echo "  App Name: prodigy"
         echo "  Environment: prod" 
         echo "  Location: ${{ env.AZURE_LOCATION }}"
         echo "  App Service Plan SKU: B1"
         echo "  Resource Group: ${{ env.AZURE_RESOURCE_GROUP }}"
         
-        # Deploy the Bicep template asynchronously to avoid stream consumption issues
-        echo "Executing deployment command..."
-        az deployment group create \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name "$deployment_name" \
-          --template-file azure/main.bicep \
-          --no-wait \
-          --output none \
-          --parameters \
-            appName=prodigy \
-            environment=prod \
-            location="${{ env.AZURE_LOCATION }}" \
-            appServicePlanSku="B1" \
-            azureTenantId="${{ secrets.AZURE_TENANT_ID }}" \
-            azureClientId="${{ secrets.AZURE_CLIENT_ID }}" \
-            azureClientSecret="${{ secrets.AZURE_CLIENT_SECRET }}" \
-            jwtSecretKey="${{ secrets.JWT_SECRET_KEY || '' }}" \
-            githubToken="${{ secrets.GITHUB_TOKEN }}" \
-            linkedinClientId="${{ secrets.LINKEDIN_CLIENT_ID || '' }}" \
-            linkedinClientSecret="${{ secrets.LINKEDIN_CLIENT_SECRET || '' }}"
-        
-        deployment_create_exit_code=$?
-        if [ $deployment_create_exit_code -ne 0 ]; then
-          echo "❌ Failed to start deployment. Exit code: $deployment_create_exit_code"
-          echo "Checking for recent deployment errors..."
-          az deployment group list \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --query "[?starts_with(name, 'prodigy-deployment')].{name:name, status:properties.provisioningState, timestamp:properties.timestamp}" \
-            --output table
-          exit 1
-        fi
-
-        echo "Deployment started successfully. Waiting for completion..."
-        
-        # Poll for deployment completion with timeout
-        max_wait_time=1800  # 30 minutes
-        wait_interval=30    # 30 seconds
-        elapsed_time=0
-        
-        while [ $elapsed_time -lt $max_wait_time ]; do
-          deployment_status=$(az deployment group show \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --name "$deployment_name" \
-            --query properties.provisioningState \
-            --output tsv 2>/dev/null || echo "NotFound")
-          
-          echo "Deployment status: $deployment_status (${elapsed_time}s elapsed)"
-          
-          if [ "$deployment_status" = "Succeeded" ]; then
-            echo "Deployment completed successfully!"
-            break
-          elif [ "$deployment_status" = "Failed" ] || [ "$deployment_status" = "Canceled" ]; then
-            echo "❌ Deployment failed with status: $deployment_status"
-            echo "Fetching detailed error information..."
-            # Show deployment error details
-            az deployment group show \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --name "$deployment_name" \
-              --query properties.error \
-              --output json
-            # Show resource-level errors if available
-            echo "Checking for resource-level deployment errors..."
-            az deployment operation group list \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --name "$deployment_name" \
-              --query "[?properties.provisioningState=='Failed'].{resource:properties.targetResource.resourceName, error:properties.statusMessage}" \
-              --output table
-            exit 1
-          fi
-          
-          sleep $wait_interval
-          elapsed_time=$((elapsed_time + wait_interval))
-        done
-        
-        if [ $elapsed_time -ge $max_wait_time ]; then
-          echo "Deployment timed out after ${max_wait_time} seconds"
-          exit 1
-        fi
-        
-        echo "Retrieving deployment outputs..."
-        
-        # Retrieve deployment outputs after successful completion
-        deployment_output=$(az deployment group show \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name "$deployment_name" \
-          --query properties.outputs \
-          --output json)
-
-        if [ -z "$deployment_output" ] || [ "$deployment_output" = "null" ]; then
-          echo "Error: Could not retrieve deployment outputs"
-          exit 1
-        fi
-
-        echo "Deployment outputs retrieved successfully"
-        
-        # Extract individual output values and set them as GitHub outputs
-        backend_url=$(echo $deployment_output | jq -r '.backendUrl.value // empty')
-        frontend_url=$(echo $deployment_output | jq -r '.frontendUrl.value // empty')
-        functions_url=$(echo $deployment_output | jq -r '.functionsUrl.value // empty')
-
-        if [ -z "$backend_url" ] || [ -z "$frontend_url" ] || [ -z "$functions_url" ]; then
-          echo "Error: One or more required outputs are missing"
-          echo "Backend URL: $backend_url"
-          echo "Frontend URL: $frontend_url"
-          echo "Functions URL: $functions_url"
-          exit 1
-        fi
-
-        echo "backendUrl=$backend_url" >> $GITHUB_OUTPUT
-        echo "frontendUrl=$frontend_url" >> $GITHUB_OUTPUT
-        echo "functionsUrl=$functions_url" >> $GITHUB_OUTPUT
-        
-        echo "Successfully set deployment outputs:"
-        echo "  Backend URL: $backend_url"
-        echo "  Frontend URL: $frontend_url"
-        echo "  Functions URL: $functions_url"
+        chmod +x ./deploy-with-rest-api.sh
+        ./deploy-with-rest-api.sh
 
   deploy-backend:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
@@ -252,15 +198,20 @@ jobs:
         name: backend-artifacts
         path: ./backend-artifacts
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.x'
-
-    - name: Publish backend
+    - name: Verify backend artifacts downloaded
       run: |
-        cd src/backend
-        dotnet publish -c Release -o ../../publish-backend
+        echo "🔍 Verifying backend artifacts were downloaded:"
+        echo "Directory structure:"
+        ls -la ./backend-artifacts/ || echo "❌ Backend artifacts directory not found!"
+        echo ""
+        echo "📊 Backend artifacts file count: $(find ./backend-artifacts -type f | wc -l)"
+        echo "📋 Key files check:"
+        echo "  - Prodigy.Backend.dll: $(ls ./backend-artifacts/Prodigy.Backend.dll 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - appsettings.json: $(ls ./backend-artifacts/appsettings.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - web.config: $(ls ./backend-artifacts/web.config 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo ""
+        echo "📁 Full file listing:"
+        find ./backend-artifacts -type f | head -20
 
     - name: Azure Login
       uses: azure/login@v2
@@ -268,15 +219,34 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure App Service
+      id: deploy-backend
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-api'
-        package: './publish-backend'
+        package: './backend-artifacts'
+
+    - name: Verify backend deployment
+      run: |
+        echo "🔍 Verifying backend deployment completed..."
+        echo "Deployment status: ${{ steps.deploy-backend.outcome }}"
+        echo "Attempting to check app service status..."
+        
+        # Check app service status via Azure CLI
+        az webapp show --name 'prodigy-prod-api' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "state" -o tsv || echo "❌ Failed to check app service status"
+        
+        # Get recent deployment logs
+        echo "📋 Recent deployment logs:"
+        az webapp log deployment list --name 'prodigy-prod-api' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "[0]" -o json || echo "❌ Failed to get deployment logs"
+        
+        # Quick test of API endpoint after deployment
+        echo "🧪 Testing deployed backend API..."
+        sleep 10  # Give app service a moment to start
+        curl -f --max-time 10 "https://prodigy-prod-api.azurewebsites.net/" || echo "⚠️ Initial backend test failed - this is expected during startup"
 
   deploy-frontend:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
@@ -288,21 +258,56 @@ jobs:
         name: frontend-artifacts
         path: ./frontend-artifacts
 
+    - name: Verify frontend artifacts downloaded
+      run: |
+        echo "🔍 Verifying frontend artifacts were downloaded:"
+        echo "Directory structure:"
+        ls -la ./frontend-artifacts/ || echo "❌ Frontend artifacts directory not found!"
+        echo ""
+        echo "📊 Frontend artifacts file count: $(find ./frontend-artifacts -type f | wc -l)"
+        echo "📋 Key files check:"
+        echo "  - server.js: $(ls ./frontend-artifacts/server.js 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - package.json: $(ls ./frontend-artifacts/package.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - dist/index.html: $(ls ./frontend-artifacts/dist/index.html 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - dist/assets/ dir: $(ls -d ./frontend-artifacts/dist/assets 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo ""
+        echo "📁 Full file listing:"
+        find ./frontend-artifacts -type f
+
     - name: Azure Login
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure App Service
+      id: deploy-frontend
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-frontend'
         package: './frontend-artifacts'
 
+    - name: Verify frontend deployment
+      run: |
+        echo "🔍 Verifying frontend deployment completed..."
+        echo "Deployment status: ${{ steps.deploy-frontend.outcome }}"
+        echo "Attempting to check app service status..."
+        
+        # Check app service status via Azure CLI
+        az webapp show --name 'prodigy-prod-frontend' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "state" -o tsv || echo "❌ Failed to check app service status"
+        
+        # Get recent deployment logs
+        echo "📋 Recent deployment logs:"
+        az webapp log deployment list --name 'prodigy-prod-frontend' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "[0]" -o json || echo "❌ Failed to get deployment logs"
+        
+        # Quick test of frontend endpoint after deployment
+        echo "🧪 Testing deployed frontend..."
+        sleep 10  # Give app service a moment to start
+        curl -f --max-time 10 "https://prodigy-prod-frontend.azurewebsites.net/" || echo "⚠️ Initial frontend test failed - this is expected during startup"
+
   deploy-functions:
     needs: [build-and-test, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
@@ -314,15 +319,36 @@ jobs:
         name: functions-artifacts
         path: ./functions-artifacts
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.x'
-
-    - name: Publish functions
+    - name: Verify functions artifacts downloaded
       run: |
-        cd azure-functions
-        dotnet publish -c Release -o ../publish-functions
+        echo "🔍 Verifying functions artifacts were downloaded:"
+        echo "Directory structure:"
+        ls -la ./functions-artifacts/ || echo "❌ Functions artifacts directory not found!"
+        echo ""
+        echo "📊 Functions artifacts file count: $(find ./functions-artifacts -type f | wc -l)"
+        echo "📋 Key files check:"
+        echo "  - host.json: $(ls ./functions-artifacts/host.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - functions.metadata: $(ls ./functions-artifacts/functions.metadata 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - Prodigy.Functions.dll: $(ls ./functions-artifacts/Prodigy.Functions.dll 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - worker.config.json: $(ls ./functions-artifacts/worker.config.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - extensions.json: $(ls ./functions-artifacts/extensions.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo ""
+        echo "📁 Full file listing:"
+        find ./functions-artifacts -type f | head -20
+        echo ""
+        echo "🔧 Creating optimized deployment package for Azure Functions..."
+        
+        # Create a clean deployment package specifically for Azure Functions
+        mkdir -p functions-deployment-package
+        
+        # Copy all files from artifacts to deployment package
+        cp -r ./functions-artifacts/* functions-deployment-package/
+        
+        # Verify the deployment package
+        echo "📦 Functions deployment package contents:"
+        find functions-deployment-package -type f | head -20
+        echo ""
+        echo "📊 Total files in deployment package: $(find functions-deployment-package -type f | wc -l)"
 
     - name: Azure Login
       uses: azure/login@v2
@@ -330,37 +356,150 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure Functions
-      uses: Azure/functions-action@v1
+      id: deploy-functions
+      uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-functions'
-        package: './publish-functions'
+        package: './functions-deployment-package'
+
+    - name: Verify functions deployment
+      run: |
+        echo "🔍 Verifying functions deployment completed..."
+        echo "Deployment status: ${{ steps.deploy-functions.outcome }}"
+        echo "Attempting to check function app status..."
+        
+        # Check function app status via Azure CLI
+        az functionapp show --name 'prodigy-prod-functions' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "state" -o tsv || echo "❌ Failed to check function app status"
+        
+        # Get function app runtime status
+        echo "📋 Function app runtime info:"
+        az functionapp config show --name 'prodigy-prod-functions' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "linuxFxVersion" -o tsv || echo "❌ Failed to get runtime info"
+        
+        # Quick test of functions endpoint after deployment
+        echo "🧪 Testing deployed functions..."
+        sleep 10  # Give function app a moment to start
+        curl -f --max-time 10 "https://prodigy-prod-functions.azurewebsites.net/" || echo "⚠️ Initial functions test failed - this is expected for functions without HTTP triggers"
 
   verify-deployment:
-    needs: [deploy-backend, deploy-frontend, deploy-functions]
+    needs: [deploy-backend, deploy-frontend, deploy-functions, deploy-infrastructure]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
+    - name: Initial startup delay
+      run: |
+        echo "⏳ Giving Azure App Services time to complete startup..."
+        echo "This initial delay helps ensure services are ready before health checks begin."
+        sleep 60
+        
+    - name: Debug deployment outputs
+      run: |
+        echo "🔍 Debugging deployment outputs..."
+        echo "Backend URL: '${{ needs.deploy-infrastructure.outputs.backend-url }}'"
+        echo "Frontend URL: '${{ needs.deploy-infrastructure.outputs.frontend-url }}'"
+        echo "Functions URL: '${{ needs.deploy-infrastructure.outputs.functions-url }}'"
+        
     - name: Verify backend health
       run: |
-        echo "Checking backend health..."
-        curl -f ${{ needs.deploy-infrastructure.outputs.backend-url }}/health || exit 1
-        echo "Backend is healthy"
+        BACKEND_URL="${{ needs.deploy-infrastructure.outputs.backend-url }}"
+        if [ -z "$BACKEND_URL" ]; then
+          echo "❌ Error: Backend URL is empty or not set"
+          exit 1
+        fi
+        echo "Checking backend health at: $BACKEND_URL"
+        echo "⏳ Waiting for Azure App Service to start up..."
+        
+        # Wait for backend to be ready with retry logic
+        max_attempts=12
+        attempt=1
+        wait_time=30
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "🔄 Health check attempt $attempt/$max_attempts (waiting ${wait_time}s between attempts)..."
+          
+          if curl -f --max-time 30 --connect-timeout 10 --retry 0 "$BACKEND_URL/health"; then
+            echo "✅ Backend is healthy after $attempt attempts"
+            break
+          else
+            if [ $attempt -eq $max_attempts ]; then
+              echo "❌ Backend health check failed after $max_attempts attempts"
+              echo "🔍 Attempting to get error details..."
+              curl -v --max-time 30 "$BACKEND_URL/health" || true
+              curl -v --max-time 30 "$BACKEND_URL/" || true
+              exit 1
+            else
+              echo "⏳ Attempt $attempt failed, waiting ${wait_time}s before retry..."
+              sleep $wait_time
+            fi
+          fi
+          
+          attempt=$((attempt + 1))
+        done
 
     - name: Verify frontend
       run: |
-        echo "Checking frontend..."
-        curl -f ${{ needs.deploy-infrastructure.outputs.frontend-url }} || exit 1
-        echo "Frontend is accessible"
+        FRONTEND_URL="${{ needs.deploy-infrastructure.outputs.frontend-url }}"
+        if [ -z "$FRONTEND_URL" ]; then
+          echo "❌ Error: Frontend URL is empty or not set"
+          exit 1
+        fi
+        echo "Checking frontend at: $FRONTEND_URL"
+        echo "⏳ Waiting for Azure App Service to start up..."
+        
+        # Wait for frontend to be ready with retry logic
+        max_attempts=8
+        attempt=1
+        wait_time=20
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "🔄 Frontend check attempt $attempt/$max_attempts (waiting ${wait_time}s between attempts)..."
+          
+          if curl -f --max-time 30 --connect-timeout 10 --retry 0 "$FRONTEND_URL"; then
+            echo "✅ Frontend is accessible after $attempt attempts"
+            break
+          else
+            if [ $attempt -eq $max_attempts ]; then
+              echo "❌ Frontend accessibility check failed after $max_attempts attempts"
+              echo "🔍 Attempting to get error details..."
+              curl -v --max-time 30 "$FRONTEND_URL" || true
+              exit 1
+            else
+              echo "⏳ Attempt $attempt failed, waiting ${wait_time}s before retry..."
+              sleep $wait_time
+            fi
+          fi
+          
+          attempt=$((attempt + 1))
+        done
 
     - name: Create deployment summary
       run: |
+        BACKEND_URL="${{ needs.deploy-infrastructure.outputs.backend-url }}"
+        FRONTEND_URL="${{ needs.deploy-infrastructure.outputs.frontend-url }}"
+        FUNCTIONS_URL="${{ needs.deploy-infrastructure.outputs.functions-url }}"
+        
         echo "## Deployment Successful! 🚀" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Deployed URLs:" >> $GITHUB_STEP_SUMMARY
-        echo "- **Backend API**: ${{ needs.deploy-infrastructure.outputs.backend-url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Frontend**: ${{ needs.deploy-infrastructure.outputs.frontend-url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Functions**: ${{ needs.deploy-infrastructure.outputs.functions-url }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -n "$BACKEND_URL" ]; then
+          echo "- **Backend API**: $BACKEND_URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Backend API**: ❌ URL not available" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -n "$FRONTEND_URL" ]; then
+          echo "- **Frontend**: $FRONTEND_URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Frontend**: ❌ URL not available" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -n "$FUNCTIONS_URL" ]; then
+          echo "- **Functions**: $FUNCTIONS_URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Functions**: ❌ URL not available" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
         echo "1. Verify all services are working correctly" >> $GITHUB_STEP_SUMMARY
