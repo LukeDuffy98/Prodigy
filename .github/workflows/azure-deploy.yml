@@ -90,7 +90,11 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: frontend-artifacts
-        path: src/frontend/dist/
+        path: |
+          src/frontend/dist/
+          src/frontend/server.js
+          src/frontend/package.json
+          src/frontend/package-lock.json
 
     - name: Upload functions artifacts
       uses: actions/upload-artifact@v4

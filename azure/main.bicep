@@ -156,10 +156,11 @@ resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
     serverFarmId: appServicePlan.id
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|8.0'
+      linuxFxVersion: 'DOTNET|8.0'
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
+      appCommandLine: ''
       appSettings: concat([
         {
           name: 'ASPNETCORE_ENVIRONMENT'
@@ -241,6 +242,7 @@ resource frontendApp 'Microsoft.Web/sites@2023-12-01' = {
       alwaysOn: true
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
+      appCommandLine: 'node server.js'
       appSettings: [
         {
           name: 'WEBSITE_NODE_DEFAULT_VERSION'
