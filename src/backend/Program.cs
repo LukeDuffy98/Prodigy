@@ -11,20 +11,29 @@ var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".env");
 Console.WriteLine($"Looking for .env file at: {envPath}");
 Console.WriteLine($"File exists: {File.Exists(envPath)}");
 
-if (File.Exists(envPath))
+// In production, environment variables are set via Azure App Service configuration
+var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+Console.WriteLine($"Starting Prodigy API in {environment} environment");
+
+if (environment == "Development" && File.Exists(envPath))
 {
     Env.Load(envPath);
 }
 else
 {
-    Console.WriteLine("Warning: .env file not found, trying default location");
-    Env.Load();
+    Console.WriteLine($"Using environment variables from hosting environment ({environment})");
 }
 
-// Debug: Log environment variables to verify they're loaded
+// Debug: Log environment variables to verify they're loaded (but don't log secrets in production)
 Console.WriteLine($"AZURE_TENANT_ID: {Environment.GetEnvironmentVariable("AZURE_TENANT_ID")}");
 Console.WriteLine($"AZURE_CLIENT_ID: {Environment.GetEnvironmentVariable("AZURE_CLIENT_ID")}");
-Console.WriteLine($"AZURE_CLIENT_SECRET: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")) ? "NOT SET" : "SET")}");
+if (environment == "Development")
+{
+    Console.WriteLine($"AZURE_CLIENT_SECRET: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AZURE_CLIENT_SECRET")) ? "NOT SET" : "SET")}");
+}
+
+Console.WriteLine("Application URLs will be configured by the hosting environment");
+Console.WriteLine("Starting application...");
 
 // Add services to the container.
 builder.Services.AddControllers();

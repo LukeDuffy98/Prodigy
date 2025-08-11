@@ -167,6 +167,14 @@ resource backendApp 'Microsoft.Web/sites@2023-12-01' = {
           value: 'Production'
         }
         {
+          name: 'ASPNETCORE_URLS'
+          value: 'http://+:8080'
+        }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
+        }
+        {
           name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
           value: applicationInsights.properties.ConnectionString
         }
@@ -251,6 +259,14 @@ resource frontendApp 'Microsoft.Web/sites@2023-12-01' = {
         {
           name: 'REACT_APP_API_BASE_URL'
           value: 'https://${backendAppName}.azurewebsites.net/api'
+        }
+        {
+          name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
+          value: 'false'
+        }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
         }
       ]
     }

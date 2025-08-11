@@ -88,11 +88,21 @@ jobs:
         # Copy built frontend files to dist subdirectory
         cp -r src/frontend/dist frontend-deployment-package/
         
+        # Create startup script for better Azure compatibility
+        echo '#!/bin/bash' > frontend-deployment-package/startup.sh
+        echo 'echo "Starting Prodigy Frontend Server..."' >> frontend-deployment-package/startup.sh
+        echo 'node server.js' >> frontend-deployment-package/startup.sh
+        chmod +x frontend-deployment-package/startup.sh
+        
+        # Verify deployment package has all required files
         echo "📋 Frontend deployment package structure:"
         find frontend-deployment-package -type f | head -20
         
         echo "🔧 Verifying package.json contains correct start script..."
         grep -A2 '"scripts"' frontend-deployment-package/package.json || echo "⚠️ scripts section not found"
+        
+        echo "🔧 Verifying server.js uses ES module syntax..."
+        grep -q "import express" frontend-deployment-package/server.js && echo "✅ ES module syntax confirmed" || echo "❌ CommonJS syntax detected"
 
     - name: Upload backend artifacts
       uses: actions/upload-artifact@v4
