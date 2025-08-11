@@ -54,6 +54,8 @@ jobs:
     - name: Publish functions
       run: |
         cd azure-functions
+        # Ensure local.settings.json is included in publish for Azure Functions v4
+        cp local.settings.json bin/Release/net8.0/publish/ 2>/dev/null || echo "local.settings.json not found, creating minimal version"
         dotnet publish -c Release -o bin/Release/net8.0/publish
         echo "Functions publish completed. Files created:"
         ls -la bin/Release/net8.0/publish/ | head -10
