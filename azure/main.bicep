@@ -45,7 +45,7 @@ var appServicePlanName = '${resourcePrefix}-asp'
 var backendAppName = '${resourcePrefix}-api'
 var frontendAppName = '${resourcePrefix}-frontend'
 var functionsAppName = '${resourcePrefix}-functions'
-var storageAccountName = '${replace(resourcePrefix, '-', '')}st${uniqueString(resourceGroup().id)}'
+var storageAccountName = 'prodigyst${uniqueString(resourceGroup().id)}'
 var applicationInsightsName = '${resourcePrefix}-ai'
 var logAnalyticsWorkspaceName = '${resourcePrefix}-law'
 
