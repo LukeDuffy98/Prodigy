@@ -169,9 +169,18 @@ jobs:
 
     - name: Verify backend artifacts downloaded
       run: |
-        echo "Verifying backend artifacts were downloaded:"
-        ls -la ./backend-artifacts/ || echo "Backend artifacts directory not found!"
-        echo "Backend artifacts file count: $(find ./backend-artifacts -type f | wc -l)"
+        echo "🔍 Verifying backend artifacts were downloaded:"
+        echo "Directory structure:"
+        ls -la ./backend-artifacts/ || echo "❌ Backend artifacts directory not found!"
+        echo ""
+        echo "📊 Backend artifacts file count: $(find ./backend-artifacts -type f | wc -l)"
+        echo "📋 Key files check:"
+        echo "  - Prodigy.Backend.dll: $(ls ./backend-artifacts/Prodigy.Backend.dll 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - appsettings.json: $(ls ./backend-artifacts/appsettings.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - web.config: $(ls ./backend-artifacts/web.config 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo ""
+        echo "📁 Full file listing:"
+        find ./backend-artifacts -type f | head -20
 
     - name: Azure Login
       uses: azure/login@v2
@@ -179,10 +188,24 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure App Service
+      id: deploy-backend
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-api'
         package: './backend-artifacts'
+
+    - name: Verify backend deployment
+      run: |
+        echo "🔍 Verifying backend deployment completed..."
+        echo "Deployment status: ${{ steps.deploy-backend.outcome }}"
+        echo "Attempting to check app service status..."
+        
+        # Check app service status via Azure CLI
+        az webapp show --name 'prodigy-prod-api' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "state" -o tsv || echo "❌ Failed to check app service status"
+        
+        # Get recent deployment logs
+        echo "📋 Recent deployment logs:"
+        az webapp log deployment list --name 'prodigy-prod-api' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "[0]" -o json || echo "❌ Failed to get deployment logs"
 
   deploy-frontend:
     needs: [build-and-test, deploy-infrastructure]
@@ -199,16 +222,44 @@ jobs:
         name: frontend-artifacts
         path: ./frontend-artifacts
 
+    - name: Verify frontend artifacts downloaded
+      run: |
+        echo "🔍 Verifying frontend artifacts were downloaded:"
+        echo "Directory structure:"
+        ls -la ./frontend-artifacts/ || echo "❌ Frontend artifacts directory not found!"
+        echo ""
+        echo "📊 Frontend artifacts file count: $(find ./frontend-artifacts -type f | wc -l)"
+        echo "📋 Key files check:"
+        echo "  - index.html: $(ls ./frontend-artifacts/index.html 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - assets/ dir: $(ls -d ./frontend-artifacts/assets 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo ""
+        echo "📁 Full file listing:"
+        find ./frontend-artifacts -type f
+
     - name: Azure Login
       uses: azure/login@v2
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure App Service
+      id: deploy-frontend
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-frontend'
         package: './frontend-artifacts'
+
+    - name: Verify frontend deployment
+      run: |
+        echo "🔍 Verifying frontend deployment completed..."
+        echo "Deployment status: ${{ steps.deploy-frontend.outcome }}"
+        echo "Attempting to check app service status..."
+        
+        # Check app service status via Azure CLI
+        az webapp show --name 'prodigy-prod-frontend' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "state" -o tsv || echo "❌ Failed to check app service status"
+        
+        # Get recent deployment logs
+        echo "📋 Recent deployment logs:"
+        az webapp log deployment list --name 'prodigy-prod-frontend' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "[0]" -o json || echo "❌ Failed to get deployment logs"
 
   deploy-functions:
     needs: [build-and-test, deploy-infrastructure]
@@ -227,9 +278,18 @@ jobs:
 
     - name: Verify functions artifacts downloaded
       run: |
-        echo "Verifying functions artifacts were downloaded:"
-        ls -la ./functions-artifacts/ || echo "Functions artifacts directory not found!"
-        echo "Functions artifacts file count: $(find ./functions-artifacts -type f | wc -l)"
+        echo "🔍 Verifying functions artifacts were downloaded:"
+        echo "Directory structure:"
+        ls -la ./functions-artifacts/ || echo "❌ Functions artifacts directory not found!"
+        echo ""
+        echo "📊 Functions artifacts file count: $(find ./functions-artifacts -type f | wc -l)"
+        echo "📋 Key files check:"
+        echo "  - host.json: $(ls ./functions-artifacts/host.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - functions.metadata: $(ls ./functions-artifacts/functions.metadata 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - Prodigy.Functions.dll: $(ls ./functions-artifacts/Prodigy.Functions.dll 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo ""
+        echo "📁 Full file listing:"
+        find ./functions-artifacts -type f | head -15
 
     - name: Azure Login
       uses: azure/login@v2
@@ -237,10 +297,24 @@ jobs:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     - name: Deploy to Azure Functions
+      id: deploy-functions
       uses: Azure/functions-action@v1
       with:
         app-name: 'prodigy-prod-functions'
         package: './functions-artifacts'
+
+    - name: Verify functions deployment
+      run: |
+        echo "🔍 Verifying functions deployment completed..."
+        echo "Deployment status: ${{ steps.deploy-functions.outcome }}"
+        echo "Attempting to check function app status..."
+        
+        # Check function app status via Azure CLI
+        az functionapp show --name 'prodigy-prod-functions' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' --query "state" -o tsv || echo "❌ Failed to check function app status"
+        
+        # Get recent deployment logs
+        echo "📋 Recent deployment logs:"
+        az functionapp deployment list-publishing-profiles --name 'prodigy-prod-functions' --resource-group '${{ env.AZURE_RESOURCE_GROUP }}' || echo "❌ Failed to get deployment info"
 
   verify-deployment:
     needs: [deploy-backend, deploy-frontend, deploy-functions, deploy-infrastructure]
