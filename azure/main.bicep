@@ -96,11 +96,32 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       name: 'standard'
     }
     tenantId: subscription().tenantId
-    accessPolicies: []
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: backendApp.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+      {
+        tenantId: subscription().tenantId
+        objectId: functionsApp.identity.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+          ]
+        }
+      }
+    ]
     enabledForDeployment: false
     enabledForTemplateDeployment: true
     enabledForDiskEncryption: false
-    enableRbacAuthorization: true
+    enableRbacAuthorization: false
   }
 }
 
@@ -343,27 +364,6 @@ resource linkedinClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-0
   name: 'linkedin-client-secret'
   properties: {
     value: linkedinClientSecret
-  }
-}
-
-// Role assignments for Key Vault access
-resource backendKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, backendApp.id, 'Key Vault Secrets User')
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
-    principalId: backendApp.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource functionsKeyVaultAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, functionsApp.id, 'Key Vault Secrets User')
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
-    principalId: functionsApp.identity.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 
