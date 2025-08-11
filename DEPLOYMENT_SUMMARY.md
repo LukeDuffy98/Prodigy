@@ -23,6 +23,7 @@ This implementation provides a **complete, production-ready Azure deployment** f
 
 #### 2. CI/CD Pipeline (GitHub Actions)
 - ✅ Triggered on push to main branch
+- ✅ **REST API-based deployment** for improved reliability
 - ✅ Automated build, test, deploy
 - ✅ Health checks and verification
 - ✅ Deployment summaries
@@ -68,7 +69,8 @@ scripts/
 ├── deploy-azure.sh               # Bash deployment script
 └── deploy-azure.ps1              # PowerShell deployment script
 
-Docker/
+Deployment/
+├── deploy-with-rest-api.sh       # REST API deployment script
 ├── Dockerfile.backend            # Backend containerization
 ├── Dockerfile.frontend           # Frontend + Nginx
 ├── Dockerfile.functions          # Azure Functions
@@ -81,7 +83,8 @@ Config/
 └── .github/workflows/azure-deploy.yml # CI/CD pipeline
 
 Documentation/
-└── docs/AZURE_DEPLOYMENT.md      # Complete deployment guide
+├── docs/AZURE_DEPLOYMENT.md      # Complete deployment guide
+└── docs/AZURE_REST_API_DEPLOYMENT.md # REST API deployment details
 ```
 
 ### 🧪 Validation Results
