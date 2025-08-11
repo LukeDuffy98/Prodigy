@@ -243,31 +243,68 @@ jobs:
         package: './functions-artifacts'
 
   verify-deployment:
-    needs: [deploy-backend, deploy-frontend, deploy-functions]
+    needs: [deploy-backend, deploy-frontend, deploy-functions, deploy-infrastructure]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
+    - name: Debug deployment outputs
+      run: |
+        echo "🔍 Debugging deployment outputs..."
+        echo "Backend URL: '${{ needs.deploy-infrastructure.outputs.backend-url }}'"
+        echo "Frontend URL: '${{ needs.deploy-infrastructure.outputs.frontend-url }}'"
+        echo "Functions URL: '${{ needs.deploy-infrastructure.outputs.functions-url }}'"
+        
     - name: Verify backend health
       run: |
-        echo "Checking backend health..."
-        curl -f ${{ needs.deploy-infrastructure.outputs.backend-url }}/health || exit 1
-        echo "Backend is healthy"
+        BACKEND_URL="${{ needs.deploy-infrastructure.outputs.backend-url }}"
+        if [ -z "$BACKEND_URL" ]; then
+          echo "❌ Error: Backend URL is empty or not set"
+          exit 1
+        fi
+        echo "Checking backend health at: $BACKEND_URL"
+        curl -f "$BACKEND_URL/health" || exit 1
+        echo "✅ Backend is healthy"
 
     - name: Verify frontend
       run: |
-        echo "Checking frontend..."
-        curl -f ${{ needs.deploy-infrastructure.outputs.frontend-url }} || exit 1
-        echo "Frontend is accessible"
+        FRONTEND_URL="${{ needs.deploy-infrastructure.outputs.frontend-url }}"
+        if [ -z "$FRONTEND_URL" ]; then
+          echo "❌ Error: Frontend URL is empty or not set"
+          exit 1
+        fi
+        echo "Checking frontend at: $FRONTEND_URL"
+        curl -f "$FRONTEND_URL" || exit 1
+        echo "✅ Frontend is accessible"
 
     - name: Create deployment summary
       run: |
+        BACKEND_URL="${{ needs.deploy-infrastructure.outputs.backend-url }}"
+        FRONTEND_URL="${{ needs.deploy-infrastructure.outputs.frontend-url }}"
+        FUNCTIONS_URL="${{ needs.deploy-infrastructure.outputs.functions-url }}"
+        
         echo "## Deployment Successful! 🚀" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Deployed URLs:" >> $GITHUB_STEP_SUMMARY
-        echo "- **Backend API**: ${{ needs.deploy-infrastructure.outputs.backend-url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Frontend**: ${{ needs.deploy-infrastructure.outputs.frontend-url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Functions**: ${{ needs.deploy-infrastructure.outputs.functions-url }}" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -n "$BACKEND_URL" ]; then
+          echo "- **Backend API**: $BACKEND_URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Backend API**: ❌ URL not available" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -n "$FRONTEND_URL" ]; then
+          echo "- **Frontend**: $FRONTEND_URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Frontend**: ❌ URL not available" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -n "$FUNCTIONS_URL" ]; then
+          echo "- **Functions**: $FUNCTIONS_URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- **Functions**: ❌ URL not available" >> $GITHUB_STEP_SUMMARY
+        fi
+        
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Next Steps:" >> $GITHUB_STEP_SUMMARY
         echo "1. Verify all services are working correctly" >> $GITHUB_STEP_SUMMARY
