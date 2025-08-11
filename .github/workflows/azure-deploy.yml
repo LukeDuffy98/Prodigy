@@ -318,9 +318,25 @@ jobs:
         echo "  - host.json: $(ls ./functions-artifacts/host.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
         echo "  - functions.metadata: $(ls ./functions-artifacts/functions.metadata 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
         echo "  - Prodigy.Functions.dll: $(ls ./functions-artifacts/Prodigy.Functions.dll 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - worker.config.json: $(ls ./functions-artifacts/worker.config.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
+        echo "  - extensions.json: $(ls ./functions-artifacts/extensions.json 2>/dev/null && echo '✅ Found' || echo '❌ Missing')"
         echo ""
         echo "📁 Full file listing:"
-        find ./functions-artifacts -type f | head -15
+        find ./functions-artifacts -type f | head -20
+        echo ""
+        echo "🔧 Creating optimized deployment package for Azure Functions..."
+        
+        # Create a clean deployment package specifically for Azure Functions
+        mkdir -p functions-deployment-package
+        
+        # Copy all files from artifacts to deployment package
+        cp -r ./functions-artifacts/* functions-deployment-package/
+        
+        # Verify the deployment package
+        echo "📦 Functions deployment package contents:"
+        find functions-deployment-package -type f | head -20
+        echo ""
+        echo "📊 Total files in deployment package: $(find functions-deployment-package -type f | wc -l)"
 
     - name: Azure Login
       uses: azure/login@v2
@@ -329,11 +345,10 @@ jobs:
 
     - name: Deploy to Azure Functions
       id: deploy-functions
-      uses: Azure/functions-action@v1
+      uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-functions'
-        package: './functions-artifacts'
-        respect-funcignore: true
+        package: './functions-deployment-package'
 
     - name: Verify functions deployment
       run: |
