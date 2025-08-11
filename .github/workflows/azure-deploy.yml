@@ -248,6 +248,12 @@ jobs:
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     
     steps:
+    - name: Initial startup delay
+      run: |
+        echo "⏳ Giving Azure App Services time to complete startup..."
+        echo "This initial delay helps ensure services are ready before health checks begin."
+        sleep 60
+        
     - name: Debug deployment outputs
       run: |
         echo "🔍 Debugging deployment outputs..."
@@ -263,8 +269,34 @@ jobs:
           exit 1
         fi
         echo "Checking backend health at: $BACKEND_URL"
-        curl -f "$BACKEND_URL/health" || exit 1
-        echo "✅ Backend is healthy"
+        echo "⏳ Waiting for Azure App Service to start up..."
+        
+        # Wait for backend to be ready with retry logic
+        max_attempts=12
+        attempt=1
+        wait_time=30
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "🔄 Health check attempt $attempt/$max_attempts (waiting ${wait_time}s between attempts)..."
+          
+          if curl -f --max-time 30 --connect-timeout 10 --retry 0 "$BACKEND_URL/health"; then
+            echo "✅ Backend is healthy after $attempt attempts"
+            break
+          else
+            if [ $attempt -eq $max_attempts ]; then
+              echo "❌ Backend health check failed after $max_attempts attempts"
+              echo "🔍 Attempting to get error details..."
+              curl -v --max-time 30 "$BACKEND_URL/health" || true
+              curl -v --max-time 30 "$BACKEND_URL/" || true
+              exit 1
+            else
+              echo "⏳ Attempt $attempt failed, waiting ${wait_time}s before retry..."
+              sleep $wait_time
+            fi
+          fi
+          
+          attempt=$((attempt + 1))
+        done
 
     - name: Verify frontend
       run: |
@@ -274,8 +306,33 @@ jobs:
           exit 1
         fi
         echo "Checking frontend at: $FRONTEND_URL"
-        curl -f "$FRONTEND_URL" || exit 1
-        echo "✅ Frontend is accessible"
+        echo "⏳ Waiting for Azure App Service to start up..."
+        
+        # Wait for frontend to be ready with retry logic
+        max_attempts=8
+        attempt=1
+        wait_time=20
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "🔄 Frontend check attempt $attempt/$max_attempts (waiting ${wait_time}s between attempts)..."
+          
+          if curl -f --max-time 30 --connect-timeout 10 --retry 0 "$FRONTEND_URL"; then
+            echo "✅ Frontend is accessible after $attempt attempts"
+            break
+          else
+            if [ $attempt -eq $max_attempts ]; then
+              echo "❌ Frontend accessibility check failed after $max_attempts attempts"
+              echo "🔍 Attempting to get error details..."
+              curl -v --max-time 30 "$FRONTEND_URL" || true
+              exit 1
+            else
+              echo "⏳ Attempt $attempt failed, waiting ${wait_time}s before retry..."
+              sleep $wait_time
+            fi
+          fi
+          
+          attempt=$((attempt + 1))
+        done
 
     - name: Create deployment summary
       run: |

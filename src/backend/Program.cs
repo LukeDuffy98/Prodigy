@@ -199,6 +199,10 @@ builder.Services.AddScoped<IGraphUserService, GraphUserService>();
 
 var app = builder.Build();
 
+// Add startup logging
+Console.WriteLine($"Starting Prodigy API in {app.Environment.EnvironmentName} environment");
+Console.WriteLine($"Application URLs will be configured by the hosting environment");
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -211,8 +215,13 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Redirect root to API documentation in production
-    app.MapGet("/", () => Results.Redirect("/swagger"));
+    // Enable Swagger in production for Azure deployment debugging
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Prodigy API v1");
+        c.RoutePrefix = "swagger"; // Serve Swagger UI at /swagger in production
+    });
 }
 
 app.UseHttpsRedirection();
@@ -224,14 +233,19 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Health check endpoint
-app.MapGet("/health", () => new { Status = "Healthy", Timestamp = DateTime.UtcNow, Version = "1.0.0" });
+// Health check endpoint - high priority, defined early
+app.MapGet("/health", () => 
+{
+    Console.WriteLine("Health check endpoint accessed");
+    return new { Status = "Healthy", Timestamp = DateTime.UtcNow, Version = "1.0.0", Environment = app.Environment.EnvironmentName };
+});
 
-// Welcome endpoint
+// Welcome endpoint for root
 app.MapGet("/", () => new { 
     Message = "Welcome to Prodigy API", 
     Version = "1.0.0",
-    Swagger = "/swagger",
+    Environment = app.Environment.EnvironmentName,
+    Swagger = app.Environment.IsDevelopment() ? "/" : "/swagger",
     Endpoints = new { 
         Health = "/health",
         PersonalizationProfile = "/api/user/personalization-profile",
@@ -244,4 +258,5 @@ app.MapGet("/", () => new {
     }
 });
 
+Console.WriteLine("Starting application...");
 app.Run();
