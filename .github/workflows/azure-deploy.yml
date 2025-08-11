@@ -44,6 +44,16 @@ jobs:
     - name: Build .NET solution
       run: dotnet build --no-restore
 
+    - name: Publish backend
+      run: |
+        cd src/backend
+        dotnet publish -c Release -o bin/Release/net8.0/publish
+
+    - name: Publish functions
+      run: |
+        cd azure-functions
+        dotnet publish -c Release -o bin/Release/net8.0/publish
+
     - name: Install frontend dependencies
       run: |
         cd src/frontend
@@ -143,16 +153,6 @@ jobs:
         name: backend-artifacts
         path: ./backend-artifacts
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.x'
-
-    - name: Publish backend
-      run: |
-        cd src/backend
-        dotnet publish -c Release -o ../../publish-backend
-
     - name: Azure Login
       uses: azure/login@v2
       with:
@@ -162,7 +162,7 @@ jobs:
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'prodigy-prod-api'
-        package: './publish-backend'
+        package: './backend-artifacts'
 
   deploy-frontend:
     needs: [build-and-test, deploy-infrastructure]
@@ -205,16 +205,6 @@ jobs:
         name: functions-artifacts
         path: ./functions-artifacts
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.x'
-
-    - name: Publish functions
-      run: |
-        cd azure-functions
-        dotnet publish -c Release -o ../publish-functions
-
     - name: Azure Login
       uses: azure/login@v2
       with:
@@ -224,7 +214,7 @@ jobs:
       uses: Azure/functions-action@v1
       with:
         app-name: 'prodigy-prod-functions'
-        package: './publish-functions'
+        package: './functions-artifacts'
 
   verify-deployment:
     needs: [deploy-backend, deploy-frontend, deploy-functions]
