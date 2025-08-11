@@ -48,11 +48,15 @@ jobs:
       run: |
         cd src/backend
         dotnet publish -c Release -o bin/Release/net8.0/publish
+        echo "Backend publish completed. Files created:"
+        ls -la bin/Release/net8.0/publish/ | head -10
 
     - name: Publish functions
       run: |
         cd azure-functions
         dotnet publish -c Release -o bin/Release/net8.0/publish
+        echo "Functions publish completed. Files created:"
+        ls -la bin/Release/net8.0/publish/ | head -10
 
     - name: Install frontend dependencies
       run: |
@@ -77,6 +81,11 @@ jobs:
           src/backend/bin/Release/net8.0/publish/
           !src/backend/bin/Release/net8.0/publish/**/*.pdb
 
+    - name: Verify backend artifacts path
+      run: |
+        echo "Verifying backend artifacts path exists and has content:"
+        ls -la src/backend/bin/Release/net8.0/publish/ || echo "Backend publish directory not found!"
+
     - name: Upload frontend artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -90,6 +99,11 @@ jobs:
         path: |
           azure-functions/bin/Release/net8.0/publish/
           !azure-functions/bin/Release/net8.0/publish/**/*.pdb
+
+    - name: Verify functions artifacts path
+      run: |
+        echo "Verifying functions artifacts path exists and has content:"
+        ls -la azure-functions/bin/Release/net8.0/publish/ || echo "Functions publish directory not found!"
 
   deploy-infrastructure:
     needs: build-and-test
@@ -153,6 +167,12 @@ jobs:
         name: backend-artifacts
         path: ./backend-artifacts
 
+    - name: Verify backend artifacts downloaded
+      run: |
+        echo "Verifying backend artifacts were downloaded:"
+        ls -la ./backend-artifacts/ || echo "Backend artifacts directory not found!"
+        echo "Backend artifacts file count: $(find ./backend-artifacts -type f | wc -l)"
+
     - name: Azure Login
       uses: azure/login@v2
       with:
@@ -204,6 +224,12 @@ jobs:
       with:
         name: functions-artifacts
         path: ./functions-artifacts
+
+    - name: Verify functions artifacts downloaded
+      run: |
+        echo "Verifying functions artifacts were downloaded:"
+        ls -la ./functions-artifacts/ || echo "Functions artifacts directory not found!"
+        echo "Functions artifacts file count: $(find ./functions-artifacts -type f | wc -l)"
 
     - name: Azure Login
       uses: azure/login@v2
